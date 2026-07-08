@@ -1,39 +1,48 @@
 import { createContext, useContext, useState } from 'react';
 
-// 1. Creamos la "pizarra"
 const AuthContext = createContext(null);
 
-// 2. El "proveedor": el componente que envuelve toda la app
-//    y hace la pizarra disponible para todos
 export function AuthProvider({ children }) {
-
-  // Por ahora el usuario empieza como null (no logueado)
-  // Cuando el backend exista, aquí validaremos el JWT
   const [user, setUser] = useState(null);
 
-  // Simula el login: recibe credenciales, devuelve el rol
-  // Reemplazar esto por axios.post('/api/auth/login/') cuando el backend esté
-  function login(email, password) {
-    // ── Mock: decidimos el rol según el email ──────────────────────
-    // En producción esto vendrá del backend en el token JWT
-    let mockUser = null;
+  // Ahora login recibe también el "selectedRole" que viene del toggle
+  // (paciente | personal). Esto decide qué credenciales son válidas.
+  function login(email, password, selectedRole) {
+    // 🔌 AQUÍ CONECTA EL BACKEND:
+    // reemplazar todo este bloque por:
+    // const res = await axios.post('/api/auth/login/', { email, password });
+    // setUser(res.data.user);
+    // return res.data.user.role;
 
-    if (email === 'admin@saludagendax.com') {
-      mockUser = { name: 'Carlos Admin', email, role: 'admin' };
-    } else if (email === 'medico@saludagendax.com') {
-      mockUser = { name: 'Dra. Torres', email, role: 'medico' };
-    } else {
-      // Cualquier otro email → paciente
-      mockUser = { name: 'Ana García', email, role: 'paciente' };
+    if (selectedRole === 'personal') {
+      // Pestaña "Personal Médico": solo reconocemos admin y médico
+      if (email === 'admin@saludagendax.com') {
+        const mockUser = { name: 'Carlos Admin', email, role: 'admin' };
+        setUser(mockUser);
+        return mockUser.role;
+      }
+      if (email === 'medico@saludagendax.com') {
+        const mockUser = { name: 'Dra. Torres', email, role: 'medico' };
+        setUser(mockUser);
+        return mockUser.role;
+      }
+      // Email no reconocido como personal médico
+      return null;
     }
-    // ───────────────────────────────────────────────────────────────
 
-    setUser(mockUser);   // Escribimos en la pizarra
-    return mockUser.role; // Devolvemos el rol para que Login sepa a dónde redirigir
+    // Pestaña "Paciente": bloqueamos que entren con emails de personal
+    if (email === 'admin@saludagendax.com' || email === 'medico@saludagendax.com') {
+      return null;
+    }
+
+    // Cualquier otro email → paciente
+    const mockUser = { name: 'Ana García', email, role: 'paciente' };
+    setUser(mockUser);
+    return mockUser.role;
   }
 
   function logout() {
-    setUser(null); // Borramos la pizarra
+    setUser(null);
   }
 
   return (
@@ -43,9 +52,6 @@ export function AuthProvider({ children }) {
   );
 }
 
-// 3. Hook personalizado para leer la pizarra fácilmente
-//    En vez de escribir useContext(AuthContext) en cada componente,
-//    escribimos simplemente useAuth()
 export function useAuth() {
   return useContext(AuthContext);
 }

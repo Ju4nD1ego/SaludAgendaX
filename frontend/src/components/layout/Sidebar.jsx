@@ -18,7 +18,7 @@ import { useAuth } from '../../context/AuthContext';
 const navItems = {
   paciente: [
     { to: '/patient/home',         icon: <LayoutDashboard size={20} />, label: 'Inicio'    },
-    { to: '/patient/appointments', icon: <CalendarDays    size={20} />, label: 'Mis Citas' },
+    { to: '/patient/calendar', icon: <CalendarDays size={20} />, label: 'Mis Citas' },
     { to: '/patient/history',      icon: <ClipboardList  size={20} />, label: 'Historial'  },
     { to: '/patient/profile',      icon: <UserCircle     size={20} />, label: 'Mi Perfil'  },
   ],

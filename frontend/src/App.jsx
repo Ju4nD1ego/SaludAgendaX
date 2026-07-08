@@ -6,6 +6,11 @@ import Register       from './pages/Register';
 import MainLayout     from './components/layout/MainLayout';
 import PatientHome    from './pages/patient/PatientHome';
 import AdminDashboard from './pages/admin/AdminDashboard';
+import NewAppointment from './pages/patient/NewAppointment';
+import AppointmentCalendar from './pages/patient/AppointmentCalendar';
+import PatientProfile from './pages/patient/PatientProfile';
+import PatientHistory from './pages/patient/PatientHistory';
+import DoctorAgenda from './pages/medico/DoctorAgenda';
 
 function App() {
   return (
@@ -28,6 +33,10 @@ function App() {
           >
             <Route index element={<Navigate to="home" replace />} />
             <Route path="home" element={<PatientHome />} />
+            <Route path="new-appointment" element={<NewAppointment />} />
+            <Route path="calendar" element={<AppointmentCalendar />} />
+            <Route path="history" element={<PatientHistory />} />
+            <Route path="profile" element={<PatientProfile />} />
           </Route>
 
           {/* ── Admin (protegida) ──────────────────────── */}
@@ -41,6 +50,18 @@ function App() {
           >
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<AdminDashboard />} />
+          </Route>
+
+          <Route
+            path="/medico"
+            element={
+              <ProtectedRoute allowedRoles={['medico']}>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<Navigate to="agenda" replace />} />
+            <Route path="agenda" element={<DoctorAgenda />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/login" replace />} />
