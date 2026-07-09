@@ -1,0 +1,13 @@
+# Python / Django
+venv/
+__pycache__/
+*.pyc
+db.sqlite3
+.env
+
+# Node
+node_modules/
+
+# Editor
+.vscode/
+.idea/
