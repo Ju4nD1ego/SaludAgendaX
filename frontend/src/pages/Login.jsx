@@ -45,8 +45,12 @@ function Login() {
       } else {
         navigate('/patient/home');
       }
-    } catch {
-      setError('Credenciales inválidas. Verifica tu correo y contraseña.');
+    } catch (err) {
+      if (err.response) {
+        setError('Credenciales inválidas. Verifica tu correo y contraseña.');
+      } else {
+        setError('No se pudo conectar con el servidor. ¿Está corriendo el backend?');
+      }
     }
   }
 

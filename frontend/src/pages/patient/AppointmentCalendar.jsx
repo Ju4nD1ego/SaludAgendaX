@@ -68,6 +68,7 @@ export default function AppointmentCalendar() {
   const [citas, setCitas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [cancelando, setCancelando] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -111,6 +112,19 @@ export default function AppointmentCalendar() {
   function citasEnCelda(dia, hora) {
     const fechaISO = toISODate(dia);
     return citas.filter(c => c.date === fechaISO && c.hour === hora);
+  }
+
+  async function handleCancelar(id) {
+    setCancelando(true);
+    try {
+      await api.patch(`/appointments/${id}/cancel/`);
+      setCitas((prev) => prev.map((c) => (c.id === id ? { ...c, status: 'cancelada' } : c)));
+      setCitaSeleccionada((prev) => (prev ? { ...prev, status: 'cancelada' } : prev));
+    } catch {
+      setError('No se pudo cancelar la cita.');
+    } finally {
+      setCancelando(false);
+    }
   }
 
   if (loading) {
@@ -308,9 +322,19 @@ export default function AppointmentCalendar() {
               </div>
             </div>
 
+            {(citaSeleccionada.status === 'pendiente' || citaSeleccionada.status === 'confirmada') && (
+              <button
+                onClick={() => handleCancelar(citaSeleccionada.id)}
+                disabled={cancelando}
+                className="btn btn-error btn-outline btn-sm w-full mt-6 disabled:opacity-60"
+              >
+                {cancelando ? 'Cancelando...' : 'Cancelar Cita'}
+              </button>
+            )}
+
             <button
               onClick={() => setCitaSeleccionada(null)}
-              className="btn btn-outline btn-sm w-full mt-6 border-slate-300 text-slate-600 hover:bg-slate-50"
+              className="btn btn-outline btn-sm w-full mt-2 border-slate-300 text-slate-600 hover:bg-slate-50"
             >
               Cerrar
             </button>

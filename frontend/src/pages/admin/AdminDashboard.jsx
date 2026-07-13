@@ -85,6 +85,8 @@ export default function AdminDashboard() {
   const [error, setError] = useState('');
   const [citaSeleccionada, setCitaSeleccionada] = useState(null);
   const [mostrarNuevaCita, setMostrarNuevaCita] = useState(false);
+  const [confirmandoId, setConfirmandoId] = useState(null);
+  const [cancelandoId, setCancelandoId] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -164,6 +166,30 @@ export default function AdminDashboard() {
     });
     return { graficaSemanal: porDia, especialidadesSemana: [...especialidadesSet] };
   }, [citas]);
+
+  async function handleConfirmarCita(id) {
+    setConfirmandoId(id);
+    try {
+      await api.patch(`/appointments/${id}/confirm/`);
+      await recargarDatos();
+    } catch {
+      setError('No se pudo confirmar la cita.');
+    } finally {
+      setConfirmandoId(null);
+    }
+  }
+
+  async function handleCancelarCita(id) {
+    setCancelandoId(id);
+    try {
+      await api.patch(`/appointments/${id}/cancel/`);
+      await recargarDatos();
+    } catch {
+      setError('No se pudo cancelar la cita.');
+    } finally {
+      setCancelandoId(null);
+    }
+  }
 
   async function handleNuevaCitaCreada() {
     setMostrarNuevaCita(false);
@@ -320,13 +346,31 @@ export default function AdminDashboard() {
                       <td>
                         <span className={`badge ${s.className} badge-sm`}>{s.label}</span>
                       </td>
-                      <td>
+                      <td className="flex items-center gap-1">
                         <button
                           onClick={() => setCitaSeleccionada(cita)}
                           className="btn btn-ghost btn-xs text-blue-600 hover:bg-blue-50"
                         >
                           Ver
                         </button>
+                        {cita.status === 'pendiente' && (
+                          <button
+                            onClick={() => handleConfirmarCita(cita.id)}
+                            disabled={confirmandoId === cita.id}
+                            className="btn btn-ghost btn-xs text-emerald-600 hover:bg-emerald-50 disabled:opacity-50"
+                          >
+                            {confirmandoId === cita.id ? 'Confirmando...' : 'Confirmar'}
+                          </button>
+                        )}
+                        {(cita.status === 'pendiente' || cita.status === 'confirmada') && (
+                          <button
+                            onClick={() => handleCancelarCita(cita.id)}
+                            disabled={cancelandoId === cita.id}
+                            className="btn btn-ghost btn-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
+                          >
+                            {cancelandoId === cita.id ? 'Cancelando...' : 'Cancelar'}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
