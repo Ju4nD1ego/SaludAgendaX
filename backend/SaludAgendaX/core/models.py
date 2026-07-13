@@ -60,6 +60,33 @@ class Doctor(models.Model):
         return f"Dr(a). {self.user.get_full_name() or self.user.username} - {self.specialty}"
 
 
+# ── Horario básico del médico ─────────────────────────────────────────────────
+# Bloques recurrentes de disponibilidad por día de la semana, usados para
+# calcular los slots libres en el calendario y en el wizard de nueva cita.
+class DoctorSchedule(models.Model):
+    class DayOfWeek(models.IntegerChoices):
+        MONDAY = 0, 'Lunes'
+        TUESDAY = 1, 'Martes'
+        WEDNESDAY = 2, 'Miércoles'
+        THURSDAY = 3, 'Jueves'
+        FRIDAY = 4, 'Viernes'
+        SATURDAY = 5, 'Sábado'
+        SUNDAY = 6, 'Domingo'
+
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name='schedules')
+    day_of_week = models.IntegerField(choices=DayOfWeek.choices)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    slot_duration_minutes = models.PositiveIntegerField(default=30)
+
+    class Meta:
+        ordering = ['day_of_week', 'start_time']
+        unique_together = ('doctor', 'day_of_week', 'start_time')
+
+    def __str__(self):
+        return f"{self.doctor} - {self.get_day_of_week_display()} {self.start_time}-{self.end_time}"
+
+
 # ── Cita médica ───────────────────────────────────────────────────────────────
 # Coincide con mockAppointments/mockCitas del frontend: fecha, hora, estado, etc.
 class Appointment(models.Model):

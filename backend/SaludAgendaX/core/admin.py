@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User, Specialty, Patient, Doctor, Appointment
+from .models import User, Specialty, Patient, Doctor, DoctorSchedule, Appointment
 
 
 @admin.register(User)
@@ -28,6 +28,12 @@ class PatientAdmin(admin.ModelAdmin):
 class DoctorAdmin(admin.ModelAdmin):
     list_display = ('user', 'specialty', 'consultorio', 'is_active_doctor')
     list_filter = ('specialty', 'is_active_doctor')
+
+
+@admin.register(DoctorSchedule)
+class DoctorScheduleAdmin(admin.ModelAdmin):
+    list_display = ('doctor', 'day_of_week', 'start_time', 'end_time', 'slot_duration_minutes')
+    list_filter = ('day_of_week', 'doctor')
 
 
 @admin.register(Appointment)
