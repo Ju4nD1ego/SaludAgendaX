@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   CalendarCheck,
@@ -12,7 +12,6 @@ import {
   EyeOff,
   User,
   Building2,
-  Info,
   ArrowRight,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -27,36 +26,29 @@ function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  function handleSubmit(e) {
-  e.preventDefault();
-  setError('');
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
 
-  if (!email || !password) {
-    setError('Por favor completa todos los campos.');
-    return;
+    if (!email || !password) {
+      setError('Por favor completa todos los campos.');
+      return;
+    }
+
+    try {
+      const userRole = await login(email, password);
+
+      if (userRole === 'admin') {
+        navigate('/admin/dashboard');
+      } else if (userRole === 'medico') {
+        navigate('/medico/agenda');
+      } else {
+        navigate('/patient/home');
+      }
+    } catch {
+      setError('Credenciales inválidas. Verifica tu correo y contraseña.');
+    }
   }
-
-  // Ahora le pasamos "role" (el del toggle) a login()
-  const userRole = login(email, password, role);
-
-  // Si login() devuelve null, el email no coincide con el rol seleccionado
-  if (!userRole) {
-    setError(
-      role === 'personal'
-        ? 'Correo no reconocido como personal médico.'
-        : 'Este correo pertenece a personal médico. Cambia de pestaña.'
-    );
-    return;
-  }
-
-  if (userRole === 'admin') {
-    navigate('/admin/dashboard');
-  } else if (userRole === 'medico') {
-    navigate('/medico/agenda');
-  } else {
-    navigate('/patient/home');
-  }
-}
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 relative overflow-hidden p-4 md:p-8">
@@ -184,16 +176,6 @@ function Login() {
               {error}
             </div>
           )}
-
-          {/* Credenciales de prueba */}
-          <div className="flex items-start gap-2.5 bg-blue-50/60 border border-blue-100 rounded-xl p-3 mb-5">
-            <Info size={15} className="text-blue-500 flex-shrink-0 mt-0.5" />
-            <div className="text-xs text-slate-500 leading-relaxed">
-              <p className="font-semibold text-slate-600">Credenciales de prueba</p>
-              <p>Pestaña Paciente: <span className="font-mono text-blue-700">cualquier@email.com</span></p>
-              <p>Pestaña Personal: <span className="font-mono text-blue-700">admin@saludagendax.com</span> o <span className="font-mono text-blue-700">medico@saludagendax.com</span></p>
-            </div>
-          </div>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {/* Correo con ícono */}

@@ -1,5 +1,5 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   HeartPulse,
   ShieldCheck,
@@ -11,8 +11,70 @@ import {
   Mail,
   Lock,
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+
+const epsOptions = [
+  { value: 'sura', label: 'EPS Sura' },
+  { value: 'sanitas', label: 'EPS Sanitas' },
+  { value: 'nueva_eps', label: 'Nueva EPS' },
+  { value: 'salud_total', label: 'Salud Total' },
+  { value: 'particular', label: 'Particular / Sin EPS' },
+];
 
 function Register() {
+  const [fullName, setFullName] = useState('');
+  const [documentType, setDocumentType] = useState('');
+  const [documentNumber, setDocumentNumber] = useState('');
+  const [eps, setEps] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const { register } = useAuth();
+  const navigate = useNavigate();
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
+
+    if (!fullName || !documentType || !documentNumber || !email || !password) {
+      setError('Por favor completa todos los campos obligatorios.');
+      return;
+    }
+    if (password.length < 8) {
+      setError('La contraseña debe tener al menos 8 caracteres.');
+      return;
+    }
+
+    const [firstName, ...rest] = fullName.trim().split(' ');
+    const lastName = rest.join(' ');
+    const epsLabel = epsOptions.find((opt) => opt.value === eps)?.label ?? '';
+
+    setSubmitting(true);
+    try {
+      await register({
+        username: email,
+        email,
+        password,
+        first_name: firstName,
+        last_name: lastName,
+        document_type: documentType,
+        document_number: documentNumber,
+        eps: epsLabel,
+      });
+      navigate('/patient/home');
+    } catch (err) {
+      const data = err?.response?.data;
+      const firstFieldError = data && Object.values(data)[0];
+      setError(
+        Array.isArray(firstFieldError) ? firstFieldError[0] : firstFieldError || 'No se pudo crear la cuenta. Intenta de nuevo.'
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 relative overflow-hidden p-4 md:p-8">
 
@@ -98,7 +160,13 @@ function Register() {
             Ingresa tus datos tal como aparecen en tu documento de identidad.
           </p>
 
-          <form className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {error && (
+            <div className="alert alert-error mb-4 py-2 text-sm">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
             {/* Nombre Completo */}
             <div className="form-control md:col-span-2">
@@ -110,6 +178,8 @@ function Register() {
                 <input
                   type="text"
                   placeholder="Ej: Juan Pérez"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
                   className="input input-bordered w-full pl-10 bg-slate-50 border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-slate-800"
                   required
                 />
@@ -123,7 +193,9 @@ function Register() {
               </label>
               <select
                 className="select select-bordered w-full bg-slate-50 border-slate-300 focus:border-blue-500 text-slate-700"
-                defaultValue=""
+                value={documentType}
+                onChange={(e) => setDocumentType(e.target.value)}
+                required
               >
                 <option value="" disabled>Seleccionar...</option>
                 <option value="CC">Cédula de Ciudadanía</option>
@@ -142,6 +214,8 @@ function Register() {
                 <input
                   type="text"
                   placeholder="1002345678"
+                  value={documentNumber}
+                  onChange={(e) => setDocumentNumber(e.target.value)}
                   className="input input-bordered w-full pl-10 bg-slate-50 border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-slate-800"
                   required
                 />
@@ -157,14 +231,13 @@ function Register() {
                 <Building2 size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
                 <select
                   className="select select-bordered w-full pl-10 bg-slate-50 border-slate-300 focus:border-blue-500 text-slate-700"
-                  defaultValue=""
+                  value={eps}
+                  onChange={(e) => setEps(e.target.value)}
                 >
                   <option value="" disabled>Selecciona tu EPS</option>
-                  <option value="sura">EPS Sura</option>
-                  <option value="sanitas">EPS Sanitas</option>
-                  <option value="nueva_eps">Nueva EPS</option>
-                  <option value="salud_total">Salud Total</option>
-                  <option value="particular">Particular / Sin EPS</option>
+                  {epsOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -179,6 +252,8 @@ function Register() {
                 <input
                   type="email"
                   placeholder="juan@ejemplo.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="input input-bordered w-full pl-10 bg-slate-50 border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-slate-800"
                   required
                 />
@@ -195,6 +270,8 @@ function Register() {
                 <input
                   type="password"
                   placeholder="Mínimo 8 caracteres"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="input input-bordered w-full pl-10 bg-slate-50 border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-slate-800"
                   required
                 />
@@ -205,9 +282,10 @@ function Register() {
             <div className="md:col-span-2 mt-2">
               <button
                 type="submit"
-                className="btn bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white border-none w-full text-base tracking-wide shadow-lg shadow-blue-500/30"
+                disabled={submitting}
+                className="btn bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white border-none w-full text-base tracking-wide shadow-lg shadow-blue-500/30 disabled:opacity-60"
               >
-                Crear mi cuenta
+                {submitting ? 'Creando cuenta...' : 'Crear mi cuenta'}
               </button>
             </div>
           </form>
