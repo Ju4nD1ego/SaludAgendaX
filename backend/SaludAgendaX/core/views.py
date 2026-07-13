@@ -1,3 +1,5 @@
+import datetime
+
 from rest_framework import generics, mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -47,9 +49,11 @@ class IsAdminOrReadOnly(permissions.BasePermission):
 
 
 class IsAdminOrOwnerDoctor(permissions.BasePermission):
-    """Un médico solo puede ver/editar su propio perfil; el admin puede con cualquiera."""
+    """Lectura abierta a cualquier autenticado; solo admin o el propio médico pueden editar."""
 
     def has_object_permission(self, request, view, obj):
+        if request.method in permissions.SAFE_METHODS:
+            return True
         user = request.user
         if user.role == User.Role.ADMIN or user.is_superuser:
             return True
@@ -159,6 +163,41 @@ class DoctorViewSet(
         if specialty_id:
             qs = qs.filter(specialty_id=specialty_id)
         return qs
+
+    @action(detail=True, methods=['get'])
+    def availability(self, request, pk=None):
+        doctor = self.get_object()
+        date_str = request.query_params.get('date')
+        if not date_str:
+            raise ValidationError({'date': 'Debes indicar una fecha (YYYY-MM-DD).'})
+        try:
+            target_date = datetime.date.fromisoformat(date_str)
+        except ValueError:
+            raise ValidationError({'date': 'Formato de fecha inválido, usa YYYY-MM-DD.'})
+
+        schedules = doctor.schedules.filter(day_of_week=target_date.weekday())
+        booked_times = set(
+            Appointment.objects.filter(doctor=doctor, date=target_date)
+            .exclude(status=Appointment.Status.CANCELADA)
+            .values_list('time', flat=True)
+        )
+
+        slots = []
+        for schedule in schedules:
+            current = datetime.datetime.combine(target_date, schedule.start_time)
+            end = datetime.datetime.combine(target_date, schedule.end_time)
+            step = datetime.timedelta(minutes=schedule.slot_duration_minutes)
+            while current < end:
+                slot_time = current.time()
+                if slot_time not in booked_times:
+                    slots.append(slot_time.strftime('%H:%M'))
+                current += step
+
+        return Response({
+            'doctor': doctor.id,
+            'date': date_str,
+            'available_slots': slots,
+        })
 
 
 class DoctorScheduleViewSet(viewsets.ModelViewSet):
