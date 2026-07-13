@@ -1,60 +1,36 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Stethoscope, User, Calendar, Clock, CheckCircle2, ArrowLeft } from 'lucide-react';
+import api from '../../api/client';
+import { doctorDisplayName } from '../../utils/appointments';
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-// Simula lo que vendrá del backend: especialidades, médicos por especialidad,
-// y horarios disponibles por médico. Reemplazar por llamadas axios cuando exista la API.
-
-const mockEspecialidades = [
-  { id: 'general',      nombre: 'Medicina General' },
-  { id: 'cardiologia',  nombre: 'Cardiología'       },
-  { id: 'dermatologia', nombre: 'Dermatología'      },
-  { id: 'ortopedia',    nombre: 'Ortopedia'         },
-];
-
-const mockMedicos = {
-  general: [
-    { id: 1, nombre: 'Dr. Carlos Mendoza',  consultorio: 'Consultorio 3' },
-    { id: 2, nombre: 'Dra. Paula Jiménez',  consultorio: 'Consultorio 4' },
-  ],
-  cardiologia: [
-    { id: 3, nombre: 'Dra. María Torres',   consultorio: 'Consultorio 8' },
-  ],
-  dermatologia: [
-    { id: 4, nombre: 'Dr. Andrés Ríos',     consultorio: 'Consultorio 12' },
-  ],
-  ortopedia: [
-    { id: 5, nombre: 'Dr. Diego Castillo',  consultorio: 'Consultorio 6' },
-  ],
-};
-
-// Horarios disponibles por médico (simulado — algunos ya ocupados)
-const mockHorarios = {
-  1: ['08:00 AM', '09:00 AM', '11:00 AM', '02:00 PM', '03:30 PM'],
-  2: ['08:30 AM', '10:00 AM', '01:00 PM', '04:00 PM'],
-  3: ['09:00 AM', '10:30 AM', '02:30 PM'],
-  4: ['08:00 AM', '11:00 AM', '03:00 PM', '04:30 PM'],
-  5: ['09:30 AM', '01:30 PM', '03:00 PM'],
-};
-
-// Próximos 7 días hábiles, simulados
+// Próximos 7 días hábiles (esto es solo UI de calendario, no depende del backend)
 function getProximosDias() {
   const dias = [];
-  let fecha = new Date();
+  let fecha;
   let contador = 0;
   while (dias.length < 7) {
     fecha = new Date();
     fecha.setDate(fecha.getDate() + contador);
     contador++;
-    // Saltamos fines de semana (0 = domingo, 6 = sábado)
     if (fecha.getDay() !== 0 && fecha.getDay() !== 6) {
       dias.push(new Date(fecha));
     }
   }
   return dias;
 }
-// ─────────────────────────────────────────────────────────────────────────────
+function toISODate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+function formatTime12h(hhmm) {
+  const [h, m] = hhmm.split(':');
+  const d = new Date();
+  d.setHours(Number(h), Number(m), 0, 0);
+  return d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true });
+}
 
 const steps = ['Especialidad', 'Médico', 'Fecha y hora', 'Confirmar'];
 
@@ -68,9 +44,75 @@ export default function NewAppointment() {
   const [hora, setHora] = useState(null);
   const [confirmado, setConfirmado] = useState(false);
 
+  const [especialidades, setEspecialidades] = useState([]);
+  const [medicos, setMedicos] = useState([]);
+  const [horariosDisponibles, setHorariosDisponibles] = useState([]);
+
+  const [loadingEspecialidades, setLoadingEspecialidades] = useState(true);
+  const [loadingMedicos, setLoadingMedicos] = useState(false);
+  const [loadingHorarios, setLoadingHorarios] = useState(false);
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
   const proximosDias = useMemo(() => getProximosDias(), []);
-  const medicosDisponibles = especialidad ? mockMedicos[especialidad.id] || [] : [];
-  const horariosDisponibles = medico ? mockHorarios[medico.id] || [] : [];
+
+  useEffect(() => {
+    let active = true;
+    api.get('/specialties/')
+      .then(({ data }) => {
+        if (active) setEspecialidades(data.map((s) => ({ id: s.id, nombre: s.name })));
+      })
+      .catch(() => {
+        if (active) setError('No se pudieron cargar las especialidades.');
+      })
+      .finally(() => {
+        if (active) setLoadingEspecialidades(false);
+      });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!especialidad) return;
+    let active = true;
+    // El loading debe quedar en true de inmediato al cambiar de especialidad,
+    // antes de que arranque el fetch — es el patrón esperado aquí.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoadingMedicos(true);
+    api.get(`/doctors/?specialty=${especialidad.id}`)
+      .then(({ data }) => {
+        if (!active) return;
+        setMedicos(data.map((d) => ({
+          id: d.id,
+          nombre: doctorDisplayName(d),
+          consultorio: d.consultorio || 'Por confirmar',
+        })));
+      })
+      .catch(() => {
+        if (active) setError('No se pudieron cargar los médicos de esta especialidad.');
+      })
+      .finally(() => {
+        if (active) setLoadingMedicos(false);
+      });
+    return () => { active = false; };
+  }, [especialidad]);
+
+  useEffect(() => {
+    if (!medico || !fecha) return;
+    let active = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoadingHorarios(true);
+    api.get(`/doctors/${medico.id}/availability/?date=${toISODate(fecha)}`)
+      .then(({ data }) => {
+        if (active) setHorariosDisponibles(data.available_slots);
+      })
+      .catch(() => {
+        if (active) setError('No se pudo cargar la disponibilidad del médico.');
+      })
+      .finally(() => {
+        if (active) setLoadingHorarios(false);
+      });
+    return () => { active = false; };
+  }, [medico, fecha]);
 
   function formatDiaCorto(date) {
     return date.toLocaleDateString('es-CO', { weekday: 'short' });
@@ -88,26 +130,43 @@ export default function NewAppointment() {
   }
 
   function handleSeleccionarEspecialidad(esp) {
+    setError('');
     setEspecialidad(esp);
-    setMedico(null); // reset en cascada
+    setMedico(null);
     setFecha(null);
     setHora(null);
     setStep(1);
   }
 
   function handleSeleccionarMedico(med) {
+    setError('');
     setMedico(med);
     setFecha(null);
     setHora(null);
     setStep(2);
   }
 
-  function handleConfirmar() {
-    // 🔌 AQUÍ CONECTA EL BACKEND:
-    // axios.post('/api/appointments/', {
-    //   especialidad: especialidad.id, medico: medico.id, fecha, hora
-    // })
-    setConfirmado(true);
+  async function handleConfirmar() {
+    setError('');
+    setSubmitting(true);
+    try {
+      await api.post('/appointments/', {
+        doctor: medico.id,
+        specialty: especialidad.id,
+        date: toISODate(fecha),
+        time: hora,
+      });
+      setConfirmado(true);
+    } catch (err) {
+      const data = err?.response?.data;
+      const message = data?.non_field_errors?.[0] || data?.detail || 'No se pudo agendar la cita. Intenta con otro horario.';
+      setError(message);
+      // El horario probablemente ya no está libre: volvemos a elegir fecha/hora.
+      setHora(null);
+      setStep(2);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   // ── Pantalla de éxito ──────────────────────────────────────────────────────
@@ -120,7 +179,7 @@ export default function NewAppointment() {
           </div>
           <h2 className="text-xl font-bold text-slate-800 mb-2">¡Cita agendada!</h2>
           <p className="text-slate-500 mb-6">
-            Te esperamos el {formatFechaCompleta(fecha)} a las {hora}
+            Te esperamos el {formatFechaCompleta(fecha)} a las {formatTime12h(hora)}
           </p>
           <div className="bg-slate-50 rounded-xl p-5 text-left mb-6 space-y-2">
             <p className="text-sm"><span className="text-slate-400">Especialidad:</span> <span className="font-medium text-slate-700">{especialidad.nombre}</span></p>
@@ -179,26 +238,34 @@ export default function NewAppointment() {
         ))}
       </div>
 
+      {error && (
+        <div className="alert alert-error mb-4 py-2 text-sm">{error}</div>
+      )}
+
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
 
         {/* Paso 0 — Especialidad */}
         {step === 0 && (
           <div>
             <h3 className="font-semibold text-slate-800 mb-4">¿Qué especialidad necesitas?</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {mockEspecialidades.map((esp) => (
-                <button
-                  key={esp.id}
-                  onClick={() => handleSeleccionarEspecialidad(esp)}
-                  className="flex items-center gap-3 p-4 rounded-xl border border-slate-200 hover:border-blue-400 hover:bg-blue-50/50 transition-colors text-left"
-                >
-                  <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                    <Stethoscope size={18} className="text-blue-600" />
-                  </div>
-                  <span className="font-medium text-slate-700">{esp.nombre}</span>
-                </button>
-              ))}
-            </div>
+            {loadingEspecialidades ? (
+              <p className="text-sm text-slate-400">Cargando especialidades...</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {especialidades.map((esp) => (
+                  <button
+                    key={esp.id}
+                    onClick={() => handleSeleccionarEspecialidad(esp)}
+                    className="flex items-center gap-3 p-4 rounded-xl border border-slate-200 hover:border-blue-400 hover:bg-blue-50/50 transition-colors text-left"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                      <Stethoscope size={18} className="text-blue-600" />
+                    </div>
+                    <span className="font-medium text-slate-700">{esp.nombre}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -208,23 +275,29 @@ export default function NewAppointment() {
             <h3 className="font-semibold text-slate-800 mb-4">
               Médicos de {especialidad.nombre}
             </h3>
-            <div className="flex flex-col gap-3">
-              {medicosDisponibles.map((med) => (
-                <button
-                  key={med.id}
-                  onClick={() => handleSeleccionarMedico(med)}
-                  className="flex items-center gap-3 p-4 rounded-xl border border-slate-200 hover:border-blue-400 hover:bg-blue-50/50 transition-colors text-left"
-                >
-                  <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">
-                    <User size={18} className="text-slate-500" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-slate-700">{med.nombre}</p>
-                    <p className="text-xs text-slate-400">{med.consultorio}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
+            {loadingMedicos ? (
+              <p className="text-sm text-slate-400">Cargando médicos...</p>
+            ) : medicos.length === 0 ? (
+              <p className="text-sm text-slate-400">No hay médicos disponibles para esta especialidad.</p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {medicos.map((med) => (
+                  <button
+                    key={med.id}
+                    onClick={() => handleSeleccionarMedico(med)}
+                    className="flex items-center gap-3 p-4 rounded-xl border border-slate-200 hover:border-blue-400 hover:bg-blue-50/50 transition-colors text-left"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">
+                      <User size={18} className="text-slate-500" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-slate-700">{med.nombre}</p>
+                      <p className="text-xs text-slate-400">{med.consultorio}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
             <button
               onClick={() => setStep(0)}
               className="text-sm text-blue-600 font-medium mt-4 hover:underline"
@@ -265,21 +338,27 @@ export default function NewAppointment() {
                   <Clock size={18} className="text-blue-600" />
                   Horarios disponibles
                 </h3>
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-4">
-                  {horariosDisponibles.map((h) => (
-                    <button
-                      key={h}
-                      onClick={() => setHora(h)}
-                      className={`py-2.5 rounded-lg border text-sm font-medium transition-colors ${
-                        hora === h
-                          ? 'bg-blue-600 border-blue-600 text-white'
-                          : 'border-slate-200 hover:border-blue-400 text-slate-700'
-                      }`}
-                    >
-                      {h}
-                    </button>
-                  ))}
-                </div>
+                {loadingHorarios ? (
+                  <p className="text-sm text-slate-400 mb-4">Buscando horarios libres...</p>
+                ) : horariosDisponibles.length === 0 ? (
+                  <p className="text-sm text-slate-400 mb-4">El médico no tiene horarios libres este día. Elige otra fecha.</p>
+                ) : (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-4">
+                    {horariosDisponibles.map((h) => (
+                      <button
+                        key={h}
+                        onClick={() => setHora(h)}
+                        className={`py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                          hora === h
+                            ? 'bg-blue-600 border-blue-600 text-white'
+                            : 'border-slate-200 hover:border-blue-400 text-slate-700'
+                        }`}
+                      >
+                        {formatTime12h(h)}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </>
             )}
 
@@ -324,7 +403,7 @@ export default function NewAppointment() {
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-400">Hora</span>
-                <span className="font-medium text-slate-700">{hora}</span>
+                <span className="font-medium text-slate-700">{formatTime12h(hora)}</span>
               </div>
             </div>
             <div className="flex justify-between items-center">
@@ -336,9 +415,10 @@ export default function NewAppointment() {
               </button>
               <button
                 onClick={handleConfirmar}
-                className="btn bg-gradient-to-r from-blue-600 to-blue-500 text-white border-none px-8"
+                disabled={submitting}
+                className="btn bg-gradient-to-r from-blue-600 to-blue-500 text-white border-none px-8 disabled:opacity-60"
               >
-                Confirmar Cita
+                {submitting ? 'Agendando...' : 'Confirmar Cita'}
               </button>
             </div>
           </div>

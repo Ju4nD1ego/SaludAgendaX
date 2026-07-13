@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -9,16 +9,8 @@ import {
   X,
   Sparkles,
 } from 'lucide-react';
-
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-const mockCitas = [
-  { id: 1, especialidad: 'Medicina General', medico: 'Dr. Carlos Mendoza', consultorio: 'Consultorio 3 - Piso 1', fecha: '2025-07-14', hora: 9,  estado: 'confirmada' },
-  { id: 2, especialidad: 'Cardiología',      medico: 'Dra. María Torres',  consultorio: 'Consultorio 8 - Piso 2', fecha: '2025-07-15', hora: 14, estado: 'pendiente'  },
-  { id: 3, especialidad: 'Dermatología',     medico: 'Dr. Andrés Ríos',    consultorio: 'Consultorio 12 - Piso 3', fecha: '2025-07-16', hora: 11, estado: 'confirmada' },
-  { id: 4, especialidad: 'Medicina General', medico: 'Dr. Carlos Mendoza', consultorio: 'Consultorio 3 - Piso 1', fecha: '2025-07-17', hora: 8,  estado: 'confirmada' },
-  { id: 5, especialidad: 'Ortopedia',        medico: 'Dr. Diego Castillo', consultorio: 'Consultorio 6 - Piso 1', fecha: '2025-07-18', hora: 16, estado: 'pendiente'  },
-];
-// ─────────────────────────────────────────────────────────────────────────────
+import api from '../../api/client';
+import { mapAppointment } from '../../utils/appointments';
 
 const HORAS = Array.from({ length: 11 }, (_, i) => i + 7); // 7am a 5pm
 
@@ -26,11 +18,16 @@ const estadoStyles = {
   confirmada: { chip: 'bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100', dot: 'bg-blue-500',  label: 'Confirmada' },
   pendiente:  { chip: 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100', dot: 'bg-amber-500', label: 'Pendiente'  },
   cancelada:  { chip: 'bg-red-50 border-red-300 text-red-700 hover:bg-red-100', dot: 'bg-red-500',    label: 'Cancelada'  },
+  atendida:   { chip: 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100', dot: 'bg-emerald-500', label: 'Atendida' },
+  no_asistio: { chip: 'bg-slate-100 border-slate-300 text-slate-600 hover:bg-slate-200', dot: 'bg-slate-400', label: 'No Asistió' },
 };
 
 // ── Helpers de fechas ─────────────────────────────────────────────────────────
 function toISODate(date) {
-  return date.toISOString().split('T')[0];
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 function getLunesDeSemana(date) {
   const d = new Date(date);
@@ -66,8 +63,26 @@ function esHoy(date) {
 
 export default function AppointmentCalendar() {
   const [vista, setVista] = useState('semana');
-  const [fechaActual, setFechaActual] = useState(new Date('2025-07-15'));
+  const [fechaActual, setFechaActual] = useState(new Date());
   const [citaSeleccionada, setCitaSeleccionada] = useState(null);
+  const [citas, setCitas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    api.get('/appointments/')
+      .then(({ data }) => {
+        if (active) setCitas(data.map(mapAppointment));
+      })
+      .catch(() => {
+        if (active) setError('No se pudieron cargar tus citas.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
 
   const diasVisibles = useMemo(() => {
     if (vista === 'dia') return [fechaActual];
@@ -75,11 +90,10 @@ export default function AppointmentCalendar() {
     return getDiasSemana(lunes);
   }, [vista, fechaActual]);
 
-  // Citas dentro del rango visible, para el resumen del header
   const citasDelRango = useMemo(() => {
     const idsVisibles = new Set(diasVisibles.map(toISODate));
-    return mockCitas.filter(c => idsVisibles.has(c.fecha));
-  }, [diasVisibles]);
+    return citas.filter(c => idsVisibles.has(c.date));
+  }, [diasVisibles, citas]);
 
   function irAnterior() {
     const nueva = new Date(fechaActual);
@@ -96,7 +110,11 @@ export default function AppointmentCalendar() {
   }
   function citasEnCelda(dia, hora) {
     const fechaISO = toISODate(dia);
-    return mockCitas.filter(c => c.fecha === fechaISO && c.hora === hora);
+    return citas.filter(c => c.date === fechaISO && c.hour === hora);
+  }
+
+  if (loading) {
+    return <div className="p-8 text-center text-slate-400">Cargando calendario...</div>;
   }
 
   return (
@@ -112,7 +130,6 @@ export default function AppointmentCalendar() {
           <p className="text-slate-500 mt-1">Consulta tus citas por día o por semana.</p>
         </div>
 
-        {/* Resumen rápido — le da un poco de "vida" al header */}
         <div className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-500 text-white px-4 py-2.5 rounded-xl shadow-sm shadow-blue-500/20">
           <Sparkles size={16} className="text-blue-100" />
           <span className="text-sm font-medium">
@@ -120,6 +137,10 @@ export default function AppointmentCalendar() {
           </span>
         </div>
       </div>
+
+      {error && (
+        <div className="alert alert-error mb-4 py-2 text-sm">{error}</div>
+      )}
 
       {/* ── Controles ─────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
@@ -201,7 +222,7 @@ export default function AppointmentCalendar() {
                 </div>
 
                 {diasVisibles.map((dia) => {
-                  const citas = citasEnCelda(dia, hora);
+                  const citasCelda = citasEnCelda(dia, hora);
                   return (
                     <div
                       key={toISODate(dia) + hora}
@@ -209,8 +230,8 @@ export default function AppointmentCalendar() {
                         esHoy(dia) ? 'bg-blue-50/30' : ''
                       }`}
                     >
-                      {citas.map((cita) => {
-                        const s = estadoStyles[cita.estado];
+                      {citasCelda.map((cita) => {
+                        const s = estadoStyles[cita.status] ?? estadoStyles.pendiente;
                         return (
                           <button
                             key={cita.id}
@@ -219,9 +240,9 @@ export default function AppointmentCalendar() {
                           >
                             <p className="font-semibold truncate flex items-center gap-1">
                               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.dot}`} />
-                              {cita.especialidad}
+                              {cita.specialty}
                             </p>
-                            <p className="truncate opacity-80 pl-2.5">{cita.medico}</p>
+                            <p className="truncate opacity-80 pl-2.5">{cita.doctor}</p>
                           </button>
                         );
                       })}
@@ -235,7 +256,7 @@ export default function AppointmentCalendar() {
       </div>
 
       {/* ── Leyenda ───────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-4 mt-4 text-xs text-slate-500">
+      <div className="flex items-center gap-4 mt-4 text-xs text-slate-500 flex-wrap">
         {Object.entries(estadoStyles).map(([key, s]) => (
           <span key={key} className="flex items-center gap-1.5">
             <span className={`w-2.5 h-2.5 rounded-full ${s.dot}`} /> {s.label}
@@ -260,26 +281,26 @@ export default function AppointmentCalendar() {
               <X size={18} />
             </button>
 
-            <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border mb-4 ${estadoStyles[citaSeleccionada.estado].chip}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${estadoStyles[citaSeleccionada.estado].dot}`} />
-              {estadoStyles[citaSeleccionada.estado].label}
+            <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border mb-4 ${estadoStyles[citaSeleccionada.status].chip}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${estadoStyles[citaSeleccionada.status].dot}`} />
+              {estadoStyles[citaSeleccionada.status].label}
             </span>
 
             <h3 className="text-lg font-bold text-slate-800 mb-1">
-              {citaSeleccionada.especialidad}
+              {citaSeleccionada.specialty}
             </h3>
             <p className="text-sm text-slate-500 capitalize mb-5">
-              {formatFechaCompleta(citaSeleccionada.fecha)}
+              {formatFechaCompleta(citaSeleccionada.date)}
             </p>
 
             <div className="space-y-3">
               <div className="flex items-center gap-3 text-sm">
                 <User size={16} className="text-slate-400 flex-shrink-0" />
-                <span className="text-slate-700">{citaSeleccionada.medico}</span>
+                <span className="text-slate-700">{citaSeleccionada.doctor}</span>
               </div>
               <div className="flex items-center gap-3 text-sm">
                 <Clock size={16} className="text-slate-400 flex-shrink-0" />
-                <span className="text-slate-700">{citaSeleccionada.hora}:00</span>
+                <span className="text-slate-700">{citaSeleccionada.timeLabel}</span>
               </div>
               <div className="flex items-center gap-3 text-sm">
                 <MapPin size={16} className="text-slate-400 flex-shrink-0" />

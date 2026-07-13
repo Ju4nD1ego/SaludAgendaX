@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -10,18 +10,8 @@ import {
   Stethoscope,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-// Citas asignadas al médico logueado. Cuando exista el backend:
-// GET /api/appointments/?doctor=me
-const mockAgenda = [
-  { id: 1, paciente: 'Ana García',     especialidad: 'Cardiología', consultorio: 'Consultorio 8 - Piso 2', fecha: '2025-07-14', hora: 9,  estado: 'confirmada' },
-  { id: 2, paciente: 'Luis Martínez',  especialidad: 'Cardiología', consultorio: 'Consultorio 8 - Piso 2', fecha: '2025-07-15', hora: 14, estado: 'pendiente'  },
-  { id: 3, paciente: 'Sara Rodríguez', especialidad: 'Cardiología', consultorio: 'Consultorio 8 - Piso 2', fecha: '2025-07-16', hora: 11, estado: 'confirmada' },
-  { id: 4, paciente: 'Pedro Gómez',    especialidad: 'Cardiología', consultorio: 'Consultorio 8 - Piso 2', fecha: '2025-07-17', hora: 8,  estado: 'confirmada' },
-  { id: 5, paciente: 'Laura Pérez',    especialidad: 'Cardiología', consultorio: 'Consultorio 8 - Piso 2', fecha: '2025-07-18', hora: 16, estado: 'pendiente'  },
-];
-// ─────────────────────────────────────────────────────────────────────────────
+import api from '../../api/client';
+import { mapAppointment } from '../../utils/appointments';
 
 const HORAS = Array.from({ length: 11 }, (_, i) => i + 7);
 
@@ -29,9 +19,16 @@ const estadoStyles = {
   confirmada: { chip: 'bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100', dot: 'bg-blue-500',  label: 'Confirmada' },
   pendiente:  { chip: 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100', dot: 'bg-amber-500', label: 'Pendiente'  },
   cancelada:  { chip: 'bg-red-50 border-red-300 text-red-700 hover:bg-red-100', dot: 'bg-red-500',    label: 'Cancelada'  },
+  atendida:   { chip: 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100', dot: 'bg-emerald-500', label: 'Atendida' },
+  no_asistio: { chip: 'bg-slate-100 border-slate-300 text-slate-600 hover:bg-slate-200', dot: 'bg-slate-400', label: 'No Asistió' },
 };
 
-function toISODate(date) { return date.toISOString().split('T')[0]; }
+function toISODate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 function getLunesDeSemana(date) {
   const d = new Date(date);
   const day = d.getDay();
@@ -53,13 +50,36 @@ function formatFechaCompleta(dateStr) {
   return d.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 function esHoy(date) { return toISODate(date) === toISODate(new Date()); }
-// ─────────────────────────────────────────────────────────────────────────────
+
+function displayName(user) {
+  if (!user) return 'Doctor';
+  const fullName = `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim();
+  return fullName || user.username;
+}
 
 export default function DoctorAgenda() {
   const { user } = useAuth();
   const [vista, setVista] = useState('semana');
-  const [fechaActual, setFechaActual] = useState(new Date('2025-07-15'));
+  const [fechaActual, setFechaActual] = useState(new Date());
   const [citaSeleccionada, setCitaSeleccionada] = useState(null);
+  const [citas, setCitas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    api.get('/appointments/')
+      .then(({ data }) => {
+        if (active) setCitas(data.map(mapAppointment));
+      })
+      .catch(() => {
+        if (active) setError('No se pudo cargar tu agenda.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
 
   const diasVisibles = useMemo(() => {
     if (vista === 'dia') return [fechaActual];
@@ -68,8 +88,8 @@ export default function DoctorAgenda() {
 
   const citasDelRango = useMemo(() => {
     const idsVisibles = new Set(diasVisibles.map(toISODate));
-    return mockAgenda.filter(c => idsVisibles.has(c.fecha));
-  }, [diasVisibles]);
+    return citas.filter(c => idsVisibles.has(c.date));
+  }, [diasVisibles, citas]);
 
   function irAnterior() {
     const nueva = new Date(fechaActual);
@@ -84,7 +104,11 @@ export default function DoctorAgenda() {
   function irHoy() { setFechaActual(new Date()); }
   function citasEnCelda(dia, hora) {
     const fechaISO = toISODate(dia);
-    return mockAgenda.filter(c => c.fecha === fechaISO && c.hora === hora);
+    return citas.filter(c => c.date === fechaISO && c.hour === hora);
+  }
+
+  if (loading) {
+    return <div className="p-8 text-center text-slate-400">Cargando tu agenda...</div>;
   }
 
   return (
@@ -98,7 +122,7 @@ export default function DoctorAgenda() {
             Mi Agenda
           </h1>
           <p className="text-slate-500 mt-1">
-            Bienvenido, {user?.name ?? 'Doctor'}. Consulta tu disponibilidad y citas asignadas.
+            Bienvenido, {displayName(user)}. Consulta tu disponibilidad y citas asignadas.
           </p>
         </div>
 
@@ -109,6 +133,10 @@ export default function DoctorAgenda() {
           </span>
         </div>
       </div>
+
+      {error && (
+        <div className="alert alert-error mb-4 py-2 text-sm">{error}</div>
+      )}
 
       {/* ── Controles ─────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
@@ -163,11 +191,11 @@ export default function DoctorAgenda() {
                   {hora}:00
                 </div>
                 {diasVisibles.map((dia) => {
-                  const citas = citasEnCelda(dia, hora);
+                  const citasCelda = citasEnCelda(dia, hora);
                   return (
                     <div key={toISODate(dia) + hora} className={`min-h-[56px] border-r border-b border-slate-100 last:border-r-0 p-1 transition-colors ${esHoy(dia) ? 'bg-blue-50/30' : ''}`}>
-                      {citas.map((cita) => {
-                        const s = estadoStyles[cita.estado];
+                      {citasCelda.map((cita) => {
+                        const s = estadoStyles[cita.status] ?? estadoStyles.pendiente;
                         return (
                           <button
                             key={cita.id}
@@ -176,7 +204,7 @@ export default function DoctorAgenda() {
                           >
                             <p className="font-semibold truncate flex items-center gap-1">
                               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.dot}`} />
-                              {cita.paciente}
+                              {cita.patient}
                             </p>
                           </button>
                         );
@@ -191,7 +219,7 @@ export default function DoctorAgenda() {
       </div>
 
       {/* ── Leyenda ───────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-4 mt-4 text-xs text-slate-500">
+      <div className="flex items-center gap-4 mt-4 text-xs text-slate-500 flex-wrap">
         {Object.entries(estadoStyles).map(([key, s]) => (
           <span key={key} className="flex items-center gap-1.5">
             <span className={`w-2.5 h-2.5 rounded-full ${s.dot}`} /> {s.label}
@@ -207,22 +235,22 @@ export default function DoctorAgenda() {
               <X size={18} />
             </button>
 
-            <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border mb-4 ${estadoStyles[citaSeleccionada.estado].chip}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${estadoStyles[citaSeleccionada.estado].dot}`} />
-              {estadoStyles[citaSeleccionada.estado].label}
+            <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border mb-4 ${estadoStyles[citaSeleccionada.status].chip}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${estadoStyles[citaSeleccionada.status].dot}`} />
+              {estadoStyles[citaSeleccionada.status].label}
             </span>
 
-            <h3 className="text-lg font-bold text-slate-800 mb-1">{citaSeleccionada.paciente}</h3>
-            <p className="text-sm text-slate-500 capitalize mb-5">{formatFechaCompleta(citaSeleccionada.fecha)}</p>
+            <h3 className="text-lg font-bold text-slate-800 mb-1">{citaSeleccionada.patient}</h3>
+            <p className="text-sm text-slate-500 capitalize mb-5">{formatFechaCompleta(citaSeleccionada.date)}</p>
 
             <div className="space-y-3">
               <div className="flex items-center gap-3 text-sm">
                 <User size={16} className="text-slate-400 flex-shrink-0" />
-                <span className="text-slate-700">{citaSeleccionada.especialidad}</span>
+                <span className="text-slate-700">{citaSeleccionada.specialty}</span>
               </div>
               <div className="flex items-center gap-3 text-sm">
                 <Clock size={16} className="text-slate-400 flex-shrink-0" />
-                <span className="text-slate-700">{citaSeleccionada.hora}:00</span>
+                <span className="text-slate-700">{citaSeleccionada.timeLabel}</span>
               </div>
               <div className="flex items-center gap-3 text-sm">
                 <MapPin size={16} className="text-slate-400 flex-shrink-0" />

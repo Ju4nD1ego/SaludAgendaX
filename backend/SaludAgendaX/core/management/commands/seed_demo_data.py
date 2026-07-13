@@ -109,7 +109,7 @@ class Command(BaseCommand):
                 'document_type': Patient.DocumentType.CC,
                 'document_number': '1234567890',
                 'phone': '3001234567',
-                'eps': 'Sura EPS',
+                'eps': 'EPS Sura',
                 'address': 'Calle 45 #12-30, Cali',
             },
         )

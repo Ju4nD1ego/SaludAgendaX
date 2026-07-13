@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   ClipboardList,
   Stethoscope,
@@ -8,16 +8,8 @@ import {
   CalendarX,
   FileText,
 } from 'lucide-react';
-
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-const mockHistorial = [
-  { id: 1, especialidad: 'Medicina General', medico: 'Dr. Carlos Mendoza',  fecha: '2025-05-10', hora: '09:00 AM', estado: 'atendida',   diagnostico: 'Chequeo general, sin novedades. Se recomienda control en 6 meses.' },
-  { id: 2, especialidad: 'Cardiología',      medico: 'Dra. María Torres',   fecha: '2025-04-22', hora: '02:30 PM', estado: 'atendida',   diagnostico: 'Control de presión arterial, valores dentro de rango normal.' },
-  { id: 3, especialidad: 'Dermatología',     medico: 'Dr. Andrés Ríos',     fecha: '2025-03-15', hora: '11:00 AM', estado: 'cancelada',  diagnostico: null },
-  { id: 4, especialidad: 'Medicina General', medico: 'Dr. Carlos Mendoza',  fecha: '2025-02-08', hora: '08:00 AM', estado: 'atendida',   diagnostico: 'Formulación de exámenes de rutina (hemograma, glicemia).' },
-  { id: 5, especialidad: 'Ortopedia',        medico: 'Dr. Diego Castillo',  fecha: '2025-01-20', hora: '04:00 PM', estado: 'no_asistio', diagnostico: null },
-];
-// ─────────────────────────────────────────────────────────────────────────────
+import api from '../../api/client';
+import { mapAppointment } from '../../utils/appointments';
 
 const statusConfig = {
   atendida:   { label: 'Atendida',   icon: CheckCircle2, className: 'text-emerald-600 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' },
@@ -37,21 +29,47 @@ function formatMesAnio(dateStr) {
 export default function PatientHistory() {
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('todas');
+  const [historial, setHistorial] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    api.get('/appointments/')
+      .then(({ data }) => {
+        if (!active) return;
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        // Historial = citas ya pasadas, o canceladas (sin importar la fecha).
+        const pasadas = data
+          .map(mapAppointment)
+          .filter((c) => c.status === 'cancelada' || new Date(c.date + 'T00:00:00') < hoy)
+          .sort((a, b) => new Date(b.date) - new Date(a.date));
+        setHistorial(pasadas);
+      })
+      .catch(() => {
+        if (active) setError('No se pudo cargar tu historial.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
 
   const historialFiltrado = useMemo(() => {
-    return mockHistorial
-      .filter((c) => filtroEstado === 'todas' || c.estado === filtroEstado)
+    return historial
+      .filter((c) => filtroEstado === 'todas' || c.status === filtroEstado)
       .filter((c) =>
-        c.especialidad.toLowerCase().includes(busqueda.toLowerCase()) ||
-        c.medico.toLowerCase().includes(busqueda.toLowerCase())
+        c.specialty.toLowerCase().includes(busqueda.toLowerCase()) ||
+        c.doctor.toLowerCase().includes(busqueda.toLowerCase())
       );
-  }, [busqueda, filtroEstado]);
+  }, [historial, busqueda, filtroEstado]);
 
   // Agrupamos por mes para la línea de tiempo
   const agrupadoPorMes = useMemo(() => {
     const grupos = {};
     historialFiltrado.forEach((cita) => {
-      const key = formatMesAnio(cita.fecha);
+      const key = formatMesAnio(cita.date);
       if (!grupos[key]) grupos[key] = [];
       grupos[key].push(cita);
     });
@@ -59,11 +77,14 @@ export default function PatientHistory() {
   }, [historialFiltrado]);
 
   const stats = {
-    total: mockHistorial.length,
-    atendidas: mockHistorial.filter(c => c.estado === 'atendida').length,
-    canceladas: mockHistorial.filter(c => c.estado === 'cancelada').length,
-    noAsistio: mockHistorial.filter(c => c.estado === 'no_asistio').length,
+    atendidas: historial.filter(c => c.status === 'atendida').length,
+    canceladas: historial.filter(c => c.status === 'cancelada').length,
+    noAsistio: historial.filter(c => c.status === 'no_asistio').length,
   };
+
+  if (loading) {
+    return <div className="p-8 text-center text-slate-400">Cargando tu historial...</div>;
+  }
 
   return (
     <div className="p-6 md:p-8 max-w-4xl mx-auto">
@@ -76,6 +97,10 @@ export default function PatientHistory() {
         </h1>
         <p className="text-slate-500 mt-1">Un vistazo a tu recorrido médico con nosotros.</p>
       </div>
+
+      {error && (
+        <div className="alert alert-error mb-4 py-2 text-sm">{error}</div>
+      )}
 
       {/* ── Estadísticas rápidas ──────────────────────────────────────── */}
       <div className="grid grid-cols-3 gap-3 mb-6">
@@ -140,7 +165,7 @@ export default function PatientHistory() {
                 <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-slate-200" />
 
                 {citas.map((cita) => {
-                  const s = statusConfig[cita.estado];
+                  const s = statusConfig[cita.status] ?? statusConfig.no_asistio;
                   const Icon = s.icon;
                   return (
                     <div key={cita.id} className="relative">
@@ -151,7 +176,7 @@ export default function PatientHistory() {
                         <div className="flex items-start justify-between gap-3 mb-2">
                           <div className="flex items-center gap-2">
                             <Stethoscope size={16} className="text-blue-500 flex-shrink-0" />
-                            <h4 className="font-semibold text-slate-800">{cita.especialidad}</h4>
+                            <h4 className="font-semibold text-slate-800">{cita.specialty}</h4>
                           </div>
                           <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full border flex-shrink-0 ${s.className}`}>
                             <Icon size={12} />
@@ -159,12 +184,12 @@ export default function PatientHistory() {
                           </span>
                         </div>
                         <p className="text-sm text-slate-500 mb-1">
-                          {cita.medico} · {formatFecha(cita.fecha)} · {cita.hora}
+                          {cita.doctor} · {formatFecha(cita.date)} · {cita.timeLabel}
                         </p>
-                        {cita.diagnostico && (
+                        {cita.notes && (
                           <div className="flex items-start gap-2 mt-3 pt-3 border-t border-slate-100">
                             <FileText size={14} className="text-slate-300 flex-shrink-0 mt-0.5" />
-                            <p className="text-sm text-slate-600">{cita.diagnostico}</p>
+                            <p className="text-sm text-slate-600">{cita.notes}</p>
                           </div>
                         )}
                       </div>

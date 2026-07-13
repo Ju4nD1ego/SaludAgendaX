@@ -1,6 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  User,
   Mail,
   Phone,
   IdCard,
@@ -12,41 +11,81 @@ import {
   ShieldCheck,
   HeartPulse,
 } from 'lucide-react';
+import api from '../../api/client';
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-const mockPatientData = {
-  name: 'Ana García',
-  documentType: 'CC',
-  documentNumber: '1.234.567.890',
-  email: 'ana.garcia@email.com',
-  phone: '300 123 4567',
-  eps: 'Sura EPS',
-  address: 'Calle 45 #12-30, Cali',
-  memberSince: '2023-08-14',
-};
-// ─────────────────────────────────────────────────────────────────────────────
+// Mismas opciones/etiquetas que usa Register.jsx, para que el valor guardado
+// siempre calce con una opción del selector al editar.
+const epsOptions = ['EPS Sura', 'EPS Sanitas', 'Nueva EPS', 'Salud Total', 'Particular / Sin EPS'];
 
-const epsOptions = ['Sura EPS', 'Sanitas', 'Nueva EPS', 'Salud Total', 'Particular / Sin EPS'];
-
-function formatMemberSince(dateStr) {
-  const date = new Date(dateStr + 'T00:00:00');
-  return date.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
+function toFormState(me) {
+  return {
+    name: `${me.first_name} ${me.last_name}`.trim() || me.username,
+    documentType: me.patient_profile?.document_type ?? '',
+    documentNumber: me.patient_profile?.document_number ?? '',
+    email: me.email,
+    phone: me.patient_profile?.phone ?? '',
+    eps: me.patient_profile?.eps ?? '',
+    address: me.patient_profile?.address ?? '',
+  };
 }
 
 export default function PatientProfile() {
+  const [patientId, setPatientId] = useState(null);
   const [editando, setEditando] = useState(false);
-  const [datos, setDatos] = useState(mockPatientData);
-  const [borrador, setBorrador] = useState(mockPatientData);
+  const [datos, setDatos] = useState(null);
+  const [borrador, setBorrador] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
-  function handleGuardar() {
-    // 🔌 AQUÍ CONECTA EL BACKEND:
-    // axios.put('/api/patients/me/', borrador)
-    setDatos(borrador);
-    setEditando(false);
+  useEffect(() => {
+    let active = true;
+    api.get('/auth/me/')
+      .then(({ data }) => {
+        if (!active) return;
+        setPatientId(data.patient_profile?.id ?? null);
+        const formState = toFormState(data);
+        setDatos(formState);
+        setBorrador(formState);
+      })
+      .catch(() => {
+        if (active) setError('No se pudo cargar tu perfil.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
+
+  async function handleGuardar() {
+    setError('');
+    setSaving(true);
+    try {
+      await api.patch(`/patients/${patientId}/`, {
+        phone: borrador.phone,
+        eps: borrador.eps,
+        address: borrador.address,
+        user: { email: borrador.email },
+      });
+      setDatos(borrador);
+      setEditando(false);
+    } catch {
+      setError('No se pudieron guardar los cambios. Intenta de nuevo.');
+    } finally {
+      setSaving(false);
+    }
   }
   function handleCancelar() {
     setBorrador(datos);
     setEditando(false);
+    setError('');
+  }
+
+  if (loading) {
+    return <div className="p-8 text-center text-slate-400">Cargando tu perfil...</div>;
+  }
+  if (!datos) {
+    return <div className="p-8 text-center text-red-500">{error || 'No se pudo cargar tu perfil.'}</div>;
   }
 
   const iniciales = datos.name.split(' ').map(n => n[0]).slice(0, 2).join('');
@@ -59,9 +98,12 @@ export default function PatientProfile() {
         <p className="text-slate-500 mt-1">Tu información personal y de afiliación.</p>
       </div>
 
+      {error && (
+        <div className="alert alert-error mb-4 py-2 text-sm">{error}</div>
+      )}
+
       {/* ── "Carnet" médico ───────────────────────────────────────────── */}
       <div className="relative bg-gradient-to-br from-blue-700 via-blue-600 to-blue-500 rounded-2xl shadow-lg shadow-blue-500/20 p-6 mb-6 overflow-hidden">
-        {/* Decoración de fondo */}
         <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/10" />
         <div className="absolute -bottom-10 -right-2 w-24 h-24 rounded-full bg-white/10" />
 
@@ -75,15 +117,12 @@ export default function PatientProfile() {
               <ShieldCheck size={16} className="text-blue-200 flex-shrink-0" />
             </div>
             <p className="text-blue-100 text-sm">{datos.documentType} · {datos.documentNumber}</p>
-            <p className="text-blue-200 text-xs mt-1">
-              Miembro desde {formatMemberSince(datos.memberSince)}
-            </p>
           </div>
           <div className="text-right flex-shrink-0 hidden sm:block">
             <div className="flex items-center gap-1.5 text-blue-100 text-xs mb-1 justify-end">
               <Building2 size={12} /> EPS
             </div>
-            <p className="text-white font-semibold text-sm">{datos.eps}</p>
+            <p className="text-white font-semibold text-sm">{datos.eps || 'Sin registrar'}</p>
           </div>
         </div>
       </div>
@@ -109,9 +148,10 @@ export default function PatientProfile() {
               </button>
               <button
                 onClick={handleGuardar}
-                className="btn btn-sm bg-gradient-to-r from-blue-600 to-blue-500 text-white border-none gap-1.5"
+                disabled={saving}
+                className="btn btn-sm bg-gradient-to-r from-blue-600 to-blue-500 text-white border-none gap-1.5 disabled:opacity-60"
               >
-                <Check size={14} /> Guardar
+                <Check size={14} /> {saving ? 'Guardando...' : 'Guardar'}
               </button>
             </div>
           )}
@@ -138,7 +178,7 @@ export default function PatientProfile() {
                 {epsOptions.map((eps) => <option key={eps} value={eps}>{eps}</option>)}
               </select>
             ) : (
-              <p className="text-slate-700 font-medium">{datos.eps}</p>
+              <p className="text-slate-700 font-medium">{datos.eps || 'Sin registrar'}</p>
             )}
           </div>
 
