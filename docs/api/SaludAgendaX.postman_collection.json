@@ -1,0 +1,373 @@
+{
+  "info": {
+    "name": "SaludAgendaX API",
+    "description": "Colección de la API REST de SaludAgendaX (Django + DRF + SimpleJWT). Corre `python manage.py seed_demo_data` en el backend antes de usarla para tener cuentas y datos de prueba listos: admin@saludagendax.com/admin123, paciente.demo@saludagendax.com/paciente123, y 5 médicos con medico123.\n\nFlujo recomendado: correr 'Login (Paciente)' o 'Login (Admin)' primero — el token queda guardado automáticamente en la variable de colección `accessToken` y se usa en todo lo demás.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000/api" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "patientId", "value": "" },
+    { "key": "doctorId", "value": "4" },
+    { "key": "specialtyId", "value": "" },
+    { "key": "scheduleId", "value": "" },
+    { "key": "appointmentId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Salud",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/health/", "host": ["{{baseUrl}}"], "path": ["health", ""] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Registro (paciente)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/register/", "host": ["{{baseUrl}}"], "path": ["auth", "register", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"nuevo.paciente@example.com\",\n  \"email\": \"nuevo.paciente@example.com\",\n  \"password\": \"paciente123\",\n  \"first_name\": \"Nuevo\",\n  \"last_name\": \"Paciente\",\n  \"document_type\": \"CC\",\n  \"document_number\": \"999888777\",\n  \"eps\": \"Sura EPS\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const data = pm.response.json();",
+                  "    pm.collectionVariables.set('accessToken', data.access);",
+                  "    pm.collectionVariables.set('refreshToken', data.refresh);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login (Paciente demo)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/login/", "host": ["{{baseUrl}}"], "path": ["auth", "login", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"paciente.demo@saludagendax.com\",\n  \"password\": \"paciente123\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const data = pm.response.json();",
+                  "    pm.collectionVariables.set('accessToken', data.access);",
+                  "    pm.collectionVariables.set('refreshToken', data.refresh);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login (Admin)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/login/", "host": ["{{baseUrl}}"], "path": ["auth", "login", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@saludagendax.com\",\n  \"password\": \"admin123\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const data = pm.response.json();",
+                  "    pm.collectionVariables.set('accessToken', data.access);",
+                  "    pm.collectionVariables.set('refreshToken', data.refresh);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login (Medico - Carlos Mendoza)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/login/", "host": ["{{baseUrl}}"], "path": ["auth", "login", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"carlos.mendoza@saludagendax.com\",\n  \"password\": \"medico123\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const data = pm.response.json();",
+                  "    pm.collectionVariables.set('accessToken', data.access);",
+                  "    pm.collectionVariables.set('refreshToken', data.refresh);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh token",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/refresh/", "host": ["{{baseUrl}}"], "path": ["auth", "refresh", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{refreshToken}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    pm.collectionVariables.set('accessToken', pm.response.json().access);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mi perfil (/me)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/auth/me/", "host": ["{{baseUrl}}"], "path": ["auth", "me", ""] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Pacientes",
+      "item": [
+        {
+          "name": "Listar pacientes (admin) / ver el propio (paciente)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/patients/", "host": ["{{baseUrl}}"], "path": ["patients", ""] }
+          }
+        },
+        {
+          "name": "Ver un paciente",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/patients/{{patientId}}/", "host": ["{{baseUrl}}"], "path": ["patients", "{{patientId}}", ""] }
+          }
+        },
+        {
+          "name": "Editar un paciente",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/patients/{{patientId}}/", "host": ["{{baseUrl}}"], "path": ["patients", "{{patientId}}", ""] },
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"3009998888\"\n}" }
+          }
+        },
+        {
+          "name": "Desactivar paciente (solo admin)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/patients/{{patientId}}/deactivate/", "host": ["{{baseUrl}}"], "path": ["patients", "{{patientId}}", "deactivate", ""] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Especialidades",
+      "item": [
+        {
+          "name": "Listar especialidades",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/specialties/", "host": ["{{baseUrl}}"], "path": ["specialties", ""] }
+          }
+        },
+        {
+          "name": "Crear especialidad (solo admin)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/specialties/", "host": ["{{baseUrl}}"], "path": ["specialties", ""] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Pediatría\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Medicos",
+      "item": [
+        {
+          "name": "Listar medicos (filtrable por ?specialty=)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/doctors/?specialty={{specialtyId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["doctors", ""],
+              "query": [{ "key": "specialty", "value": "{{specialtyId}}" }]
+            }
+          }
+        },
+        {
+          "name": "Ver un medico",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/doctors/{{doctorId}}/", "host": ["{{baseUrl}}"], "path": ["doctors", "{{doctorId}}", ""] }
+          }
+        },
+        {
+          "name": "Editar un medico (admin o el propio medico)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/doctors/{{doctorId}}/", "host": ["{{baseUrl}}"], "path": ["doctors", "{{doctorId}}", ""] },
+            "body": { "mode": "raw", "raw": "{\n  \"consultorio\": \"Consultorio 10\"\n}" }
+          }
+        },
+        {
+          "name": "Disponibilidad de un medico (slots libres)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/doctors/{{doctorId}}/availability/?date=2026-07-13",
+              "host": ["{{baseUrl}}"],
+              "path": ["doctors", "{{doctorId}}", "availability", ""],
+              "query": [{ "key": "date", "value": "2026-07-13" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Horarios de Medico",
+      "item": [
+        {
+          "name": "Listar horarios (filtrable por ?doctor=)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/doctor-schedules/?doctor={{doctorId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["doctor-schedules", ""],
+              "query": [{ "key": "doctor", "value": "{{doctorId}}" }]
+            }
+          }
+        },
+        {
+          "name": "Crear horario (solo admin)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/doctor-schedules/", "host": ["{{baseUrl}}"], "path": ["doctor-schedules", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"doctor\": {{doctorId}},\n  \"day_of_week\": 5,\n  \"start_time\": \"08:00\",\n  \"end_time\": \"12:00\",\n  \"slot_duration_minutes\": 30\n}"
+            }
+          }
+        },
+        {
+          "name": "Editar/borrar horario (solo admin)",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/doctor-schedules/{{scheduleId}}/", "host": ["{{baseUrl}}"], "path": ["doctor-schedules", "{{scheduleId}}", ""] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Citas",
+      "item": [
+        {
+          "name": "Listar citas (filtrable por ?date= ?doctor= ?status=)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/appointments/", "host": ["{{baseUrl}}"], "path": ["appointments", ""] }
+          }
+        },
+        {
+          "name": "Crear cita (paciente para si mismo)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/appointments/", "host": ["{{baseUrl}}"], "path": ["appointments", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"doctor\": {{doctorId}},\n  \"specialty\": {{specialtyId}},\n  \"date\": \"2026-07-20\",\n  \"time\": \"09:00\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('appointmentId', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear cita en nombre de un paciente (solo admin)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/appointments/", "host": ["{{baseUrl}}"], "path": ["appointments", ""] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patient\": {{patientId}},\n  \"doctor\": {{doctorId}},\n  \"specialty\": {{specialtyId}},\n  \"date\": \"2026-07-21\",\n  \"time\": \"10:00\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Cancelar cita",
+          "request": {
+            "method": "PATCH",
+            "url": { "raw": "{{baseUrl}}/appointments/{{appointmentId}}/cancel/", "host": ["{{baseUrl}}"], "path": ["appointments", "{{appointmentId}}", "cancel", ""] }
+          }
+        }
+      ]
+    }
+  ]
+}
