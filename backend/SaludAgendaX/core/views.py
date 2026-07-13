@@ -1,16 +1,20 @@
 from rest_framework import generics, mixins, permissions, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import User, Patient
+from .models import User, Patient, Doctor, Specialty, DoctorSchedule, Appointment
 from .serializers import (
     PatientRegisterSerializer,
     EmailTokenObtainPairSerializer,
     UserBasicSerializer,
     PatientSerializer,
     DoctorSerializer,
+    SpecialtySerializer,
+    DoctorScheduleSerializer,
+    AppointmentSerializer,
 )
 
 
@@ -30,6 +34,38 @@ class IsAdminOrOwnerPatient(permissions.BasePermission):
         if user.role == User.Role.ADMIN or user.is_superuser:
             return True
         return hasattr(user, 'patient_profile') and obj.pk == user.patient_profile.pk
+
+
+class IsAdminOrReadOnly(permissions.BasePermission):
+    """Cualquier autenticado puede leer; solo admin puede escribir."""
+
+    def has_permission(self, request, view):
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        user = request.user
+        return bool(user and user.is_authenticated and (user.role == User.Role.ADMIN or user.is_superuser))
+
+
+class IsAdminOrOwnerDoctor(permissions.BasePermission):
+    """Un médico solo puede ver/editar su propio perfil; el admin puede con cualquiera."""
+
+    def has_object_permission(self, request, view, obj):
+        user = request.user
+        if user.role == User.Role.ADMIN or user.is_superuser:
+            return True
+        return hasattr(user, 'doctor_profile') and obj.pk == user.doctor_profile.pk
+
+
+class CanCancelAppointment(permissions.BasePermission):
+    """Solo el paciente dueño de la cita o el admin pueden cancelarla; el médico no."""
+
+    def has_object_permission(self, request, view, obj):
+        user = request.user
+        if user.role == User.Role.ADMIN or user.is_superuser:
+            return True
+        if user.role == User.Role.PACIENTE and hasattr(user, 'patient_profile'):
+            return obj.patient_id == user.patient_profile.pk
+        return False
 
 
 class RegisterView(generics.CreateAPIView):
@@ -96,3 +132,100 @@ class PatientViewSet(
         patient.is_active_patient = False
         patient.save(update_fields=['is_active_patient'])
         return Response(PatientSerializer(patient).data)
+
+
+class SpecialtyViewSet(viewsets.ModelViewSet):
+    """Catálogo de especialidades. Lectura abierta, escritura solo admin."""
+
+    queryset = Specialty.objects.all()
+    serializer_class = SpecialtySerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminOrReadOnly]
+
+
+class DoctorViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Consulta y edición de médicos. El alta se hace manualmente desde /admin/."""
+
+    serializer_class = DoctorSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminOrOwnerDoctor]
+
+    def get_queryset(self):
+        qs = Doctor.objects.select_related('user', 'specialty').prefetch_related('schedules')
+        specialty_id = self.request.query_params.get('specialty')
+        if specialty_id:
+            qs = qs.filter(specialty_id=specialty_id)
+        return qs
+
+
+class DoctorScheduleViewSet(viewsets.ModelViewSet):
+    """Horarios básicos del médico. El médico solo consulta; el admin los gestiona."""
+
+    serializer_class = DoctorScheduleSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        qs = DoctorSchedule.objects.select_related('doctor')
+        doctor_id = self.request.query_params.get('doctor')
+        if doctor_id:
+            qs = qs.filter(doctor_id=doctor_id)
+        return qs
+
+
+class AppointmentViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.CreateModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Creación y visualización de citas. Cancelar es la única modificación permitida."""
+
+    serializer_class = AppointmentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = Appointment.objects.select_related('patient__user', 'doctor__user', 'specialty')
+
+        if user.role == User.Role.ADMIN or user.is_superuser:
+            pass
+        elif user.role == User.Role.PACIENTE and hasattr(user, 'patient_profile'):
+            qs = qs.filter(patient=user.patient_profile)
+        elif user.role == User.Role.MEDICO and hasattr(user, 'doctor_profile'):
+            qs = qs.filter(doctor=user.doctor_profile)
+        else:
+            return Appointment.objects.none()
+
+        date = self.request.query_params.get('date')
+        if date:
+            qs = qs.filter(date=date)
+        doctor_id = self.request.query_params.get('doctor')
+        if doctor_id:
+            qs = qs.filter(doctor_id=doctor_id)
+        status_param = self.request.query_params.get('status')
+        if status_param:
+            qs = qs.filter(status=status_param)
+        return qs
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if user.role == User.Role.PACIENTE:
+            if not hasattr(user, 'patient_profile'):
+                raise PermissionDenied('El usuario no tiene un perfil de paciente asociado.')
+            serializer.save(patient=user.patient_profile)
+        elif user.role == User.Role.ADMIN or user.is_superuser:
+            if not serializer.validated_data.get('patient'):
+                raise ValidationError({'patient': 'El administrativo debe indicar el paciente.'})
+            serializer.save()
+        else:
+            raise PermissionDenied('Los médicos no pueden crear citas.')
+
+    @action(detail=True, methods=['patch'], permission_classes=[permissions.IsAuthenticated, CanCancelAppointment])
+    def cancel(self, request, pk=None):
+        appointment = self.get_object()
+        appointment.status = Appointment.Status.CANCELADA
+        appointment.save(update_fields=['status'])
+        return Response(AppointmentSerializer(appointment).data)

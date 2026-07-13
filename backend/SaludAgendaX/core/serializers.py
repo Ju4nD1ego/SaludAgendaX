@@ -83,7 +83,22 @@ class AppointmentSerializer(serializers.ModelSerializer):
             'specialty', 'specialty_detail', 'date', 'time', 'status',
             'notes', 'created_at',
         ]
-        read_only_fields = ['created_at']
+        read_only_fields = ['status', 'created_at']
+        extra_kwargs = {'patient': {'required': False}}
+
+    def validate(self, attrs):
+        doctor = attrs.get('doctor')
+        date = attrs.get('date')
+        time = attrs.get('time')
+        if doctor and date and time:
+            conflict = Appointment.objects.filter(
+                doctor=doctor, date=date, time=time,
+            ).exclude(status=Appointment.Status.CANCELADA)
+            if conflict.exists():
+                raise serializers.ValidationError(
+                    'El médico ya tiene una cita activa en ese horario.',
+                )
+        return attrs
 
 
 class PatientRegisterSerializer(serializers.Serializer):

@@ -14,6 +14,10 @@ def health_check(request):
 
 router = DefaultRouter()
 router.register('patients', views.PatientViewSet, basename='patient')
+router.register('specialties', views.SpecialtyViewSet, basename='specialty')
+router.register('doctors', views.DoctorViewSet, basename='doctor')
+router.register('doctor-schedules', views.DoctorScheduleViewSet, basename='doctorschedule')
+router.register('appointments', views.AppointmentViewSet, basename='appointment')
 
 urlpatterns = [
     path('health/', health_check),
