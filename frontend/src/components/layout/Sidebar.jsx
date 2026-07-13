@@ -41,6 +41,14 @@ const roleLabel = {
   medico:   'Médico',
 };
 
+// El backend expone first_name/last_name (y username como último recurso),
+// no un campo "name" único.
+function displayName(user) {
+  if (!user) return 'Usuario';
+  const fullName = `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim();
+  return fullName || user.username || 'Usuario';
+}
+
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const navigate         = useNavigate();
@@ -92,9 +100,8 @@ export default function Sidebar() {
             <UserCircle className="text-white" size={22} />
           </div>
           <div className="overflow-hidden">
-            {/* Ahora viene del contexto real, no del mock hardcodeado */}
             <p className="text-white text-sm font-semibold truncate">
-              {user?.name ?? 'Usuario'}
+              {displayName(user)}
             </p>
             <p className="text-blue-200 text-xs">{roleLabel[role]}</p>
           </div>

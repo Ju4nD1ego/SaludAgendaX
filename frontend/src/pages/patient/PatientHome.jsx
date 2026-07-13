@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CalendarCheck,
@@ -8,56 +9,16 @@ import {
   MapPin,
   CalendarPlus,
   Sparkles,
-  ArrowRight,
   ShieldCheck,
 } from 'lucide-react';
-
-// ─── Mock Data ──────────────────────────────────────────────────────────────
-const mockPatient = {
-  name: 'Ana García',
-  documentType: 'CC',
-  documentNumber: '1234567890',
-  eps: 'Sura EPS',
-  epsCode: 'SURA',
-  phone: '300 123 4567',
-  email: 'ana.garcia@email.com',
-};
-
-const mockAppointments = [
-  {
-    id: 1,
-    specialty: 'Medicina General',
-    doctor: 'Dr. Carlos Mendoza',
-    date: '2025-07-15',
-    time: '09:00 AM',
-    status: 'confirmada',
-    location: 'Consultorio 3 - Piso 1',
-  },
-  {
-    id: 2,
-    specialty: 'Cardiología',
-    doctor: 'Dra. María Torres',
-    date: '2025-07-22',
-    time: '02:30 PM',
-    status: 'pendiente',
-    location: 'Consultorio 8 - Piso 2',
-  },
-  {
-    id: 3,
-    specialty: 'Dermatología',
-    doctor: 'Dr. Andrés Ríos',
-    date: '2025-08-03',
-    time: '11:00 AM',
-    status: 'confirmada',
-    location: 'Consultorio 12 - Piso 3',
-  },
-];
-// ────────────────────────────────────────────────────────────────────────────
+import api from '../../api/client';
 
 const statusConfig = {
-  confirmada: { label: 'Confirmada', className: 'badge-success' },
-  pendiente:  { label: 'Pendiente',  className: 'badge-warning' },
-  cancelada:  { label: 'Cancelada',  className: 'badge-error'   },
+  confirmada: { label: 'Confirmada',  className: 'badge-success' },
+  pendiente:  { label: 'Pendiente',   className: 'badge-warning' },
+  cancelada:  { label: 'Cancelada',   className: 'badge-error'   },
+  atendida:   { label: 'Atendida',    className: 'badge-info'    },
+  no_asistio: { label: 'No Asistió',  className: 'badge-ghost'   },
 };
 
 function formatDate(dateStr) {
@@ -82,15 +43,86 @@ function diasRestantes(dateStr) {
   if (diff > 1) return `En ${diff} días`;
   return null;
 }
+function formatTime(timeStr) {
+  if (!timeStr) return '';
+  const [h, m] = timeStr.split(':');
+  const d = new Date();
+  d.setHours(Number(h), Number(m), 0, 0);
+  return d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true });
+}
+
+// El backend no distingue género, así que usamos el mismo prefijo genérico
+// que ya usa Doctor.__str__ en core/models.py ("Dr(a).")
+function mapAppointment(apt) {
+  const doctorUser = apt.doctor_detail?.user;
+  const doctorName = doctorUser
+    ? `Dr(a). ${doctorUser.first_name} ${doctorUser.last_name}`.trim()
+    : 'Médico por confirmar';
+
+  return {
+    id: apt.id,
+    specialty: apt.specialty_detail?.name ?? 'Especialidad',
+    doctor: doctorName,
+    date: apt.date,
+    time: formatTime(apt.time),
+    status: apt.status,
+    location: apt.doctor_detail?.consultorio || 'Por confirmar',
+  };
+}
 
 export default function PatientHome() {
   const navigate = useNavigate();
-  const patient = mockPatient;
-  const appointments = mockAppointments;
 
-  // La cita más próxima ordenando por fecha (asumimos que ya vienen futuras)
-  const proximaCita = [...appointments].sort((a, b) => new Date(a.date) - new Date(b.date))[0];
-  const otrasCitas = appointments.filter(a => a.id !== proximaCita?.id);
+  const [patientName, setPatientName] = useState('');
+  const [eps, setEps] = useState('');
+  const [appointments, setAppointments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+
+    async function load() {
+      try {
+        const [meRes, appointmentsRes] = await Promise.all([
+          api.get('/auth/me/'),
+          api.get('/appointments/'),
+        ]);
+        if (!active) return;
+
+        const me = meRes.data;
+        setPatientName(`${me.first_name} ${me.last_name}`.trim() || me.username);
+        setEps(me.patient_profile?.eps || 'Sin EPS registrada');
+        setAppointments(appointmentsRes.data.map(mapAppointment));
+      } catch {
+        if (active) setError('No se pudieron cargar tus citas. Intenta de nuevo más tarde.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    load();
+    return () => { active = false; };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="p-8 text-center text-slate-400">Cargando tu información...</div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="p-8 text-center text-red-500">{error}</div>
+    );
+  }
+
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+
+  // La próxima cita: la más cercana en el futuro que no esté cancelada.
+  const proximaCita = [...appointments]
+    .filter((a) => a.status !== 'cancelada' && new Date(a.date + 'T00:00:00') >= hoy)
+    .sort((a, b) => new Date(a.date) - new Date(b.date))[0];
 
   return (
     <div className="p-6 md:p-8 max-w-6xl mx-auto">
@@ -98,7 +130,7 @@ export default function PatientHome() {
       {/* ── Encabezado ─────────────────────────────────────────────────── */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-800">
-          ¡Hola, {patient.name.split(' ')[0]}! 👋
+          ¡Hola, {patientName.split(' ')[0]}! 👋
         </h1>
         <p className="text-slate-500 mt-1">
           Aquí tienes un resumen de tu salud y tus próximas citas.
@@ -160,14 +192,13 @@ export default function PatientHome() {
       {/* ── Tarjeta EPS + Stats en una fila ───────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
 
-        {/* EPS — más compacta, ya no compite con el hero */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
             <Building2 className="text-blue-600" size={20} />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Tu EPS</p>
-            <p className="font-bold text-slate-800 truncate">{patient.eps}</p>
+            <p className="font-bold text-slate-800 truncate">{eps}</p>
           </div>
           <ShieldCheck size={16} className="text-emerald-500 flex-shrink-0" />
         </div>
@@ -176,13 +207,13 @@ export default function PatientHome() {
           icon={<Clock size={20} className="text-amber-500" />}
           bg="bg-amber-50"
           label="Pendientes de confirmar"
-          value={appointments.filter(a => a.status === 'pendiente').length}
+          value={appointments.filter((a) => a.status === 'pendiente').length}
         />
         <StatCard
           icon={<Stethoscope size={20} className="text-emerald-600" />}
           bg="bg-emerald-50"
           label="Especialidades activas"
-          value={new Set(appointments.map(a => a.specialty)).size}
+          value={new Set(appointments.map((a) => a.specialty)).size}
         />
       </div>
 
