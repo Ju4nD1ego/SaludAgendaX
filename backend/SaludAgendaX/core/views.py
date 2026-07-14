@@ -268,3 +268,12 @@ class AppointmentViewSet(
         appointment.status = Appointment.Status.CANCELADA
         appointment.save(update_fields=['status'])
         return Response(AppointmentSerializer(appointment).data)
+
+    @action(detail=True, methods=['patch'], permission_classes=[IsAdminRole])
+    def confirm(self, request, pk=None):
+        appointment = self.get_object()
+        if appointment.status != Appointment.Status.PENDIENTE:
+            raise ValidationError('Solo se pueden confirmar citas pendientes.')
+        appointment.status = Appointment.Status.CONFIRMADA
+        appointment.save(update_fields=['status'])
+        return Response(AppointmentSerializer(appointment).data)
