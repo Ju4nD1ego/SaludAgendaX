@@ -6,6 +6,9 @@ import Register       from './pages/Register';
 import MainLayout     from './components/layout/MainLayout';
 import PatientHome    from './pages/patient/PatientHome';
 import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminAppointmentsSearch from './pages/admin/AdminAppointmentsSearch';
+import AdminPatients from './pages/admin/AdminPatients';
+import AdminMedicos from './pages/admin/AdminMedicos';
 import NewAppointment from './pages/patient/NewAppointment';
 import AppointmentCalendar from './pages/patient/AppointmentCalendar';
 import PatientProfile from './pages/patient/PatientProfile';
@@ -50,6 +53,9 @@ function App() {
           >
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="citas" element={<AdminAppointmentsSearch />} />
+            <Route path="pacientes" element={<AdminPatients />} />
+            <Route path="medicos" element={<AdminMedicos />} />
           </Route>
 
           <Route

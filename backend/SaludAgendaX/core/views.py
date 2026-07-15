@@ -1,5 +1,6 @@
 import datetime
 
+from django.db.models import Q
 from rest_framework import generics, mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -125,7 +126,27 @@ class PatientViewSet(
     def get_queryset(self):
         user = self.request.user
         if user.role == User.Role.ADMIN or user.is_superuser:
-            return Patient.objects.select_related('user').all()
+            qs = Patient.objects.select_related('user').all()
+
+            # Búsqueda por nombre, apellido, documento o correo.
+            q = self.request.query_params.get('q')
+            if q:
+                qs = qs.filter(
+                    Q(user__first_name__icontains=q)
+                    | Q(user__last_name__icontains=q)
+                    | Q(document_number__icontains=q)
+                    | Q(user__email__icontains=q)
+                )
+
+            eps = self.request.query_params.get('eps')
+            if eps:
+                qs = qs.filter(eps=eps)
+
+            is_active = self.request.query_params.get('is_active')
+            if is_active is not None:
+                qs = qs.filter(is_active_patient=is_active.lower() == 'true')
+
+            return qs.order_by('user__first_name', 'user__last_name')
         if hasattr(user, 'patient_profile'):
             return Patient.objects.filter(pk=user.patient_profile.pk)
         return Patient.objects.none()
@@ -159,10 +180,38 @@ class DoctorViewSet(
 
     def get_queryset(self):
         qs = Doctor.objects.select_related('user', 'specialty').prefetch_related('schedules')
+
         specialty_id = self.request.query_params.get('specialty')
         if specialty_id:
             qs = qs.filter(specialty_id=specialty_id)
-        return qs
+
+        q = self.request.query_params.get('q')
+        if q:
+            qs = qs.filter(
+                Q(user__first_name__icontains=q)
+                | Q(user__last_name__icontains=q)
+                | Q(specialty__name__icontains=q)
+            )
+
+        is_active = self.request.query_params.get('is_active')
+        if is_active is not None:
+            qs = qs.filter(is_active_doctor=is_active.lower() == 'true')
+
+        return qs.order_by('user__first_name', 'user__last_name')
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminRole])
+    def deactivate(self, request, pk=None):
+        doctor = self.get_object()
+        doctor.is_active_doctor = False
+        doctor.save(update_fields=['is_active_doctor'])
+        return Response(DoctorSerializer(doctor).data)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminRole])
+    def activate(self, request, pk=None):
+        doctor = self.get_object()
+        doctor.is_active_doctor = True
+        doctor.save(update_fields=['is_active_doctor'])
+        return Response(DoctorSerializer(doctor).data)
 
     @action(detail=True, methods=['get'])
     def availability(self, request, pk=None):
@@ -241,12 +290,37 @@ class AppointmentViewSet(
         date = self.request.query_params.get('date')
         if date:
             qs = qs.filter(date=date)
+
+        date_from = self.request.query_params.get('date_from')
+        if date_from:
+            qs = qs.filter(date__gte=date_from)
+
+        date_to = self.request.query_params.get('date_to')
+        if date_to:
+            qs = qs.filter(date__lte=date_to)
+
         doctor_id = self.request.query_params.get('doctor')
         if doctor_id:
             qs = qs.filter(doctor_id=doctor_id)
+
+        specialty_id = self.request.query_params.get('specialty')
+        if specialty_id:
+            qs = qs.filter(specialty_id=specialty_id)
+
         status_param = self.request.query_params.get('status')
         if status_param:
             qs = qs.filter(status=status_param)
+
+        # Búsqueda de texto libre: nombre, apellido o documento del paciente.
+        # Solo tiene sentido para admin/médico, que ven citas de varios pacientes.
+        q = self.request.query_params.get('q')
+        if q:
+            qs = qs.filter(
+                Q(patient__user__first_name__icontains=q)
+                | Q(patient__user__last_name__icontains=q)
+                | Q(patient__document_number__icontains=q)
+            )
+
         return qs
 
     def perform_create(self, serializer):
