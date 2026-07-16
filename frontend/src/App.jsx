@@ -11,6 +11,7 @@ import AppointmentCalendar from './pages/patient/AppointmentCalendar';
 import PatientProfile from './pages/patient/PatientProfile';
 import PatientHistory from './pages/patient/PatientHistory';
 import DoctorAgenda from './pages/medico/DoctorAgenda';
+import DoctorProfile from './pages/medico/DoctorProfile';
 
 function App() {
   return (
@@ -62,6 +63,7 @@ function App() {
           >
             <Route index element={<Navigate to="agenda" replace />} />
             <Route path="agenda" element={<DoctorAgenda />} />
+            <Route path="profile" element={<DoctorProfile />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/login" replace />} />

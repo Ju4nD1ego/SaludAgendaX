@@ -8,8 +8,6 @@ import {
   LogOut,
   Users,
   Stethoscope,
-  BarChart3,
-  CalendarCheck,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -24,10 +22,8 @@ const navItems = {
   ],
   admin: [
     { to: '/admin/dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard'  },
-    { to: '/admin/citas',     icon: <CalendarCheck   size={20} />, label: 'Citas'      },
     { to: '/admin/pacientes', icon: <Users           size={20} />, label: 'Pacientes'  },
     { to: '/admin/medicos',   icon: <Stethoscope     size={20} />, label: 'Médicos'    },
-    { to: '/admin/reportes',  icon: <BarChart3       size={20} />, label: 'Reportes'   },
   ],
   medico: [
     { to: '/medico/agenda',  icon: <CalendarDays size={20} />, label: 'Mi Agenda'  },
