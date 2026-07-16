@@ -71,6 +71,42 @@ class DoctorSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 
+class DoctorRegisterSerializer(serializers.Serializer):
+    """Alta de médico: solo admin. Crea el User (role=medico) y su Doctor asociado."""
+
+    username = serializers.CharField()
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True, min_length=8)
+    first_name = serializers.CharField(required=False, allow_blank=True)
+    last_name = serializers.CharField(required=False, allow_blank=True)
+    specialty_id = serializers.PrimaryKeyRelatedField(
+        queryset=Specialty.objects.all(), source='specialty',
+    )
+    consultorio = serializers.CharField(required=False, allow_blank=True)
+
+    def validate_username(self, value):
+        if User.objects.filter(username=value).exists():
+            raise serializers.ValidationError('Ya existe un usuario con ese nombre de usuario.')
+        return value
+
+    def validate_email(self, value):
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError('Ya existe un usuario con ese correo.')
+        return value
+
+    def create(self, validated_data):
+        password = validated_data.pop('password')
+        specialty = validated_data.pop('specialty')
+        consultorio = validated_data.pop('consultorio', '')
+        user = User.objects.create_user(
+            role=User.Role.MEDICO, password=password, **validated_data,
+        )
+        return Doctor.objects.create(user=user, specialty=specialty, consultorio=consultorio)
+
+    def to_representation(self, instance):
+        return DoctorSerializer(instance).data
+
+
 class AppointmentSerializer(serializers.ModelSerializer):
     patient_detail = PatientSerializer(source='patient', read_only=True)
     doctor_detail = DoctorSerializer(source='doctor', read_only=True)

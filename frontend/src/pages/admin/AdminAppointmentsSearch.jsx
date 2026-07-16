@@ -49,6 +49,7 @@ export default function AdminAppointmentsSearch() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [citaSeleccionada, setCitaSeleccionada] = useState(null);
+  const [procesandoId, setProcesandoId] = useState(null);
 
   // Catálogos para los selects de filtro.
   useEffect(() => {
@@ -76,6 +77,7 @@ export default function AdminAppointmentsSearch() {
 
   // Carga inicial.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     buscar(filtrosVacios);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -86,6 +88,35 @@ export default function AdminAppointmentsSearch() {
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtros.dateFrom, filtros.dateTo, filtros.doctor, filtros.specialty, filtros.status, filtros.q]);
+
+  function actualizarCitaLocal(id, cambios) {
+    setCitas((prev) => prev.map((c) => (c.id === id ? { ...c, ...cambios } : c)));
+    setCitaSeleccionada((prev) => (prev && prev.id === id ? { ...prev, ...cambios } : prev));
+  }
+
+  async function handleConfirmar(id) {
+    setProcesandoId(id);
+    try {
+      await api.patch(`/appointments/${id}/confirm/`);
+      actualizarCitaLocal(id, { status: 'confirmada' });
+    } catch {
+      setError('No se pudo confirmar la cita.');
+    } finally {
+      setProcesandoId(null);
+    }
+  }
+
+  async function handleCancelar(id) {
+    setProcesandoId(id);
+    try {
+      await api.patch(`/appointments/${id}/cancel/`);
+      actualizarCitaLocal(id, { status: 'cancelada' });
+    } catch {
+      setError('No se pudo cancelar la cita.');
+    } finally {
+      setProcesandoId(null);
+    }
+  }
 
   function actualizarFiltro(campo, valor) {
     setFiltros((prev) => ({ ...prev, [campo]: valor }));
@@ -272,13 +303,31 @@ export default function AdminAppointmentsSearch() {
                       <td>
                         <span className={`badge ${s.className} badge-sm`}>{s.label}</span>
                       </td>
-                      <td>
+                      <td className="flex items-center gap-1">
                         <button
                           onClick={() => setCitaSeleccionada(cita)}
                           className="btn btn-ghost btn-xs text-blue-600 hover:bg-blue-50"
                         >
                           Ver
                         </button>
+                        {cita.status === 'pendiente' && (
+                          <button
+                            onClick={() => handleConfirmar(cita.id)}
+                            disabled={procesandoId === cita.id}
+                            className="btn btn-ghost btn-xs text-emerald-600 hover:bg-emerald-50 disabled:opacity-50"
+                          >
+                            Confirmar
+                          </button>
+                        )}
+                        {(cita.status === 'pendiente' || cita.status === 'confirmada') && (
+                          <button
+                            onClick={() => handleCancelar(cita.id)}
+                            disabled={procesandoId === cita.id}
+                            className="btn btn-ghost btn-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
+                          >
+                            Cancelar
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -321,9 +370,29 @@ export default function AdminAppointmentsSearch() {
                 <span className="text-slate-700">{citaSeleccionada.consultorio}</span>
               </div>
             </div>
+
+            {citaSeleccionada.status === 'pendiente' && (
+              <button
+                onClick={() => handleConfirmar(citaSeleccionada.id)}
+                disabled={procesandoId === citaSeleccionada.id}
+                className="btn btn-sm w-full mt-6 border-none text-white bg-gradient-to-r from-emerald-600 to-emerald-500 disabled:opacity-60"
+              >
+                Confirmar Cita
+              </button>
+            )}
+            {(citaSeleccionada.status === 'pendiente' || citaSeleccionada.status === 'confirmada') && (
+              <button
+                onClick={() => handleCancelar(citaSeleccionada.id)}
+                disabled={procesandoId === citaSeleccionada.id}
+                className="btn btn-error btn-outline btn-sm w-full mt-2 disabled:opacity-60"
+              >
+                Cancelar Cita
+              </button>
+            )}
+
             <button
               onClick={() => setCitaSeleccionada(null)}
-              className="btn btn-outline btn-sm w-full mt-6 border-slate-300 text-slate-600 hover:bg-slate-50"
+              className="btn btn-outline btn-sm w-full mt-2 border-slate-300 text-slate-600 hover:bg-slate-50"
             >
               Cerrar
             </button>

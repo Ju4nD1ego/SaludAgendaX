@@ -15,6 +15,7 @@ from .serializers import (
     UserBasicSerializer,
     PatientSerializer,
     DoctorSerializer,
+    DoctorRegisterSerializer,
     SpecialtySerializer,
     DoctorScheduleSerializer,
     AppointmentSerializer,
@@ -171,12 +172,22 @@ class DoctorViewSet(
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
     mixins.UpdateModelMixin,
+    mixins.CreateModelMixin,
     viewsets.GenericViewSet,
 ):
-    """Consulta y edición de médicos. El alta se hace manualmente desde /admin/."""
+    """Consulta, edición y alta de médicos (el alta solo la puede hacer un admin)."""
 
-    serializer_class = DoctorSerializer
     permission_classes = [permissions.IsAuthenticated, IsAdminOrOwnerDoctor]
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return DoctorRegisterSerializer
+        return DoctorSerializer
+
+    def get_permissions(self):
+        if self.action == 'create':
+            return [permissions.IsAuthenticated(), IsAdminRole()]
+        return super().get_permissions()
 
     def get_queryset(self):
         qs = Doctor.objects.select_related('user', 'specialty').prefetch_related('schedules')
