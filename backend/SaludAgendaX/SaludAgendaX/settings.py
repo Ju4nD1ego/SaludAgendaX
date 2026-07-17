@@ -139,3 +139,5 @@ REST_FRAMEWORK = {
 import sys  # noqa: E402
 if 'test' in sys.argv:
     PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+DEFAULT_FROM_EMAIL = "SaludAgendaX <notificaciones@saludagendax.local>"
