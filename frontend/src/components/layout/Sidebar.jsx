@@ -9,6 +9,7 @@ import {
   Users,
   Stethoscope,
   CalendarCheck,
+  Building2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -26,6 +27,7 @@ const navItems = {
     { to: '/admin/citas',     icon: <CalendarCheck   size={20} />, label: 'Citas'      },
     { to: '/admin/pacientes', icon: <Users           size={20} />, label: 'Pacientes'  },
     { to: '/admin/medicos',   icon: <Stethoscope     size={20} />, label: 'Médicos'    },
+    { to: '/admin/eps',       icon: <Building2       size={20} />, label: 'Reglas EPS' },
   ],
   medico: [
     { to: '/medico/agenda',  icon: <CalendarDays size={20} />, label: 'Mi Agenda'  },

@@ -3,7 +3,7 @@ import datetime
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from core.models import Appointment, Doctor, DoctorSchedule, Patient, Specialty, User
+from core.models import Appointment, Doctor, DoctorSchedule, EPS, Patient, Specialty, User
 
 
 class Command(BaseCommand):
@@ -13,6 +13,7 @@ class Command(BaseCommand):
         specialties = self._seed_specialties()
         doctors = self._seed_doctors(specialties)
         self._seed_schedules(doctors)
+        self._seed_eps()
         self._seed_admin()
         self._seed_demo_patient(doctors, specialties)
 
@@ -26,8 +27,34 @@ class Command(BaseCommand):
         self.stdout.write('  diego.castillo@saludagendax.com (medico123 para todos)')
 
     def _seed_specialties(self):
-        names = ['Medicina General', 'Cardiología', 'Dermatología', 'Ortopedia']
-        return {name: Specialty.objects.get_or_create(name=name)[0] for name in names}
+        data = [
+            ('Medicina General', 50000),
+            ('Cardiología', 120000),
+            ('Dermatología', 90000),
+            ('Ortopedia', 100000),
+        ]
+        result = {}
+        for name, cost in data:
+            specialty, created = Specialty.objects.get_or_create(name=name, defaults={'cost': cost})
+            if not created and specialty.cost == 0:
+                specialty.cost = cost
+                specialty.save(update_fields=['cost'])
+            result[name] = specialty
+        return result
+
+    def _seed_eps(self):
+        # Topes y presupuestos de ejemplo para las reglas de negocio (Entrega 2).
+        data = [
+            ('EPS Sura', 20, 2000000),
+            ('EPS Sanitas', 15, 1500000),
+            ('Nueva EPS', 10, 800000),
+            ('Salud Total', 12, 1000000),
+            ('Particular / Sin EPS', None, None),
+        ]
+        for name, cap, budget in data:
+            EPS.objects.get_or_create(
+                name=name, defaults={'monthly_appointment_cap': cap, 'monthly_budget': budget},
+            )
 
     def _seed_doctors(self, specialties):
         # Mismos nombres que ya usaba el mock de NewAppointment.jsx, para

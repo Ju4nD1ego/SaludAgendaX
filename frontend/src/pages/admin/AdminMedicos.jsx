@@ -74,6 +74,7 @@ export default function AdminMedicos() {
   const [borrandoHorarioId, setBorrandoHorarioId] = useState(null);
   const [mostrarNuevaEspecialidad, setMostrarNuevaEspecialidad] = useState(false);
   const [nombreEspecialidad, setNombreEspecialidad] = useState('');
+  const [costoEspecialidad, setCostoEspecialidad] = useState('');
   const [creandoEspecialidad, setCreandoEspecialidad] = useState(false);
   const [mostrarNuevoMedico, setMostrarNuevoMedico] = useState(false);
   const [nuevoMedico, setNuevoMedico] = useState(nuevoMedicoVacio);
@@ -237,9 +238,13 @@ export default function AdminMedicos() {
     setCreandoEspecialidad(true);
     setError('');
     try {
-      await api.post('/specialties/', { name: nombreEspecialidad.trim() });
+      await api.post('/specialties/', {
+        name: nombreEspecialidad.trim(),
+        cost: costoEspecialidad === '' ? 0 : Number(costoEspecialidad),
+      });
       await cargarEspecialidades();
       setNombreEspecialidad('');
+      setCostoEspecialidad('');
       setMostrarNuevaEspecialidad(false);
     } catch {
       setError('No se pudo crear la especialidad (¿ya existe?).');
@@ -356,6 +361,19 @@ export default function AdminMedicos() {
               className="input input-bordered input-sm w-full bg-slate-50 border-slate-300 text-slate-700"
             />
           </div>
+          <div className="w-40">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5 block">
+              Costo consulta
+            </label>
+            <input
+              type="number"
+              min="0"
+              placeholder="0"
+              value={costoEspecialidad}
+              onChange={(e) => setCostoEspecialidad(e.target.value)}
+              className="input input-bordered input-sm w-full bg-slate-50 border-slate-300 text-slate-700"
+            />
+          </div>
           <button
             type="submit"
             disabled={creandoEspecialidad}
@@ -365,7 +383,7 @@ export default function AdminMedicos() {
           </button>
           <button
             type="button"
-            onClick={() => { setMostrarNuevaEspecialidad(false); setNombreEspecialidad(''); }}
+            onClick={() => { setMostrarNuevaEspecialidad(false); setNombreEspecialidad(''); setCostoEspecialidad(''); }}
             className="btn btn-ghost btn-sm text-slate-500"
           >
             Cancelar

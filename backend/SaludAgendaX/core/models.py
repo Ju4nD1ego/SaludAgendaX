@@ -20,12 +20,36 @@ class User(AbstractUser):
 # ── Especialidad médica ──────────────────────────────────────────────────────
 class Specialty(models.Model):
     name = models.CharField(max_length=100, unique=True)
+    # Costo de una consulta, usado para el control presupuestal por EPS.
+    cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     def __str__(self):
         return self.name
 
     class Meta:
         verbose_name_plural = "Specialties"
+
+
+# ── EPS (entidad aseguradora) ────────────────────────────────────────────────
+# Configuración de las reglas de negocio de Entrega 2: tope de citas mensuales
+# y presupuesto mensual por EPS. Se relaciona con Patient.eps por nombre (texto
+# libre) en vez de FK, para no romper los datos ya cargados en Patient.
+class EPS(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    monthly_appointment_cap = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text='Máximo de citas activas por mes para pacientes de esta EPS. Vacío = sin tope.',
+    )
+    monthly_budget = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        help_text='Presupuesto mensual disponible para citas de esta EPS. Vacío = sin control.',
+    )
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        verbose_name_plural = "EPS"
 
 
 # ── Perfil de Paciente ───────────────────────────────────────────────────────

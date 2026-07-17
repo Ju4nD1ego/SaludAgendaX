@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import User, Patient, Doctor, Specialty, DoctorSchedule, Appointment
+from .models import User, Patient, Doctor, Specialty, EPS, DoctorSchedule, Appointment
 from .serializers import (
     PatientRegisterSerializer,
     EmailTokenObtainPairSerializer,
@@ -17,6 +17,7 @@ from .serializers import (
     DoctorSerializer,
     DoctorRegisterSerializer,
     SpecialtySerializer,
+    EPSSerializer,
     DoctorScheduleSerializer,
     AppointmentSerializer,
 )
@@ -165,6 +166,14 @@ class SpecialtyViewSet(viewsets.ModelViewSet):
 
     queryset = Specialty.objects.all()
     serializer_class = SpecialtySerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminOrReadOnly]
+
+
+class EPSViewSet(viewsets.ModelViewSet):
+    """Configuración de EPS (tope de citas y presupuesto mensual). Lectura abierta, escritura solo admin."""
+
+    queryset = EPS.objects.all().order_by('name')
+    serializer_class = EPSSerializer
     permission_classes = [permissions.IsAuthenticated, IsAdminOrReadOnly]
 
 

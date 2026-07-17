@@ -1,7 +1,14 @@
+from django.db.models import Sum
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import User, Specialty, Patient, Doctor, DoctorSchedule, Appointment
+from .models import User, Specialty, EPS, Patient, Doctor, DoctorSchedule, Appointment
+
+# Reglas de negocio (Entrega 2): un paciente no puede tener más de una cita
+# activa (pendiente/confirmada) por especialidad al mismo tiempo.
+MAX_CITAS_ACTIVAS_POR_ESPECIALIDAD = 1
+
+ESTADOS_ACTIVOS = [Appointment.Status.PENDIENTE, Appointment.Status.CONFIRMADA]
 
 
 class UserBasicSerializer(serializers.ModelSerializer):
@@ -14,7 +21,13 @@ class UserBasicSerializer(serializers.ModelSerializer):
 class SpecialtySerializer(serializers.ModelSerializer):
     class Meta:
         model = Specialty
-        fields = ['id', 'name']
+        fields = ['id', 'name', 'cost']
+
+
+class EPSSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EPS
+        fields = ['id', 'name', 'monthly_appointment_cap', 'monthly_budget']
 
 
 class DoctorScheduleSerializer(serializers.ModelSerializer):
@@ -126,6 +139,8 @@ class AppointmentSerializer(serializers.ModelSerializer):
         doctor = attrs.get('doctor')
         date = attrs.get('date')
         time = attrs.get('time')
+        specialty = attrs.get('specialty')
+
         if doctor and date and time:
             conflict = Appointment.objects.filter(
                 doctor=doctor, date=date, time=time,
@@ -134,7 +149,60 @@ class AppointmentSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     'El médico ya tiene una cita activa en ese horario.',
                 )
+
+        # El paciente puede no venir en el payload cuando se agenda a sí mismo
+        # (el campo es optional para permitir el self-booking); en ese caso lo
+        # tomamos del usuario autenticado para poder validar las reglas de negocio.
+        patient = attrs.get('patient')
+        request = self.context.get('request')
+        if patient is None and request is not None and hasattr(request.user, 'patient_profile'):
+            patient = request.user.patient_profile
+
+        if patient and specialty:
+            self._validar_frecuencia(patient, specialty)
+        if patient and specialty and date:
+            self._validar_tope_y_presupuesto_eps(patient, specialty, date)
+
         return attrs
+
+    def _validar_frecuencia(self, patient, specialty):
+        activas = Appointment.objects.filter(
+            patient=patient, specialty=specialty, status__in=ESTADOS_ACTIVOS,
+        ).count()
+        if activas >= MAX_CITAS_ACTIVAS_POR_ESPECIALIDAD:
+            raise serializers.ValidationError(
+                'Ya tienes una cita activa con esta especialidad. '
+                'Espera a que se atienda o cancélala antes de agendar otra.',
+            )
+
+    def _validar_tope_y_presupuesto_eps(self, patient, specialty, date):
+        if not patient.eps:
+            return
+        eps = EPS.objects.filter(name__iexact=patient.eps).first()
+        if eps is None:
+            return
+
+        citas_mes = Appointment.objects.filter(
+            patient__eps__iexact=patient.eps,
+            status__in=ESTADOS_ACTIVOS,
+            date__year=date.year,
+            date__month=date.month,
+        )
+
+        if eps.monthly_appointment_cap is not None:
+            if citas_mes.count() >= eps.monthly_appointment_cap:
+                raise serializers.ValidationError(
+                    f'{eps.name} alcanzó el tope de citas mensuales permitidas '
+                    f'({eps.monthly_appointment_cap}). No se pueden agendar más citas este mes.',
+                )
+
+        if eps.monthly_budget is not None:
+            gasto_actual = citas_mes.aggregate(total=Sum('specialty__cost'))['total'] or 0
+            if gasto_actual + specialty.cost > eps.monthly_budget:
+                raise serializers.ValidationError(
+                    f'{eps.name} superó el presupuesto mensual disponible para citas. '
+                    'No se pueden agendar más citas este mes.',
+                )
 
 
 class PatientRegisterSerializer(serializers.Serializer):
