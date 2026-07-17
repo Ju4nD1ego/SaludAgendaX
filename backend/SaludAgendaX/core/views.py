@@ -1,4 +1,4 @@
-import datetime
+﻿import datetime
 
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import User, Patient, Doctor, Specialty, EPS, DoctorSchedule, Appointment
+from .notifications import send_confirmation_email, send_cancellation_email
 from .serializers import (
     PatientRegisterSerializer,
     EmailTokenObtainPairSerializer,
@@ -426,6 +427,7 @@ class AppointmentViewSet(
         appointment = self.get_object()
         appointment.status = Appointment.Status.CANCELADA
         appointment.save(update_fields=['status'])
+        send_cancellation_email(appointment)
         return Response(AppointmentSerializer(appointment).data)
 
     @action(detail=True, methods=['patch'], permission_classes=[IsAdminRole])
@@ -435,4 +437,8 @@ class AppointmentViewSet(
             raise ValidationError('Solo se pueden confirmar citas pendientes.')
         appointment.status = Appointment.Status.CONFIRMADA
         appointment.save(update_fields=['status'])
+        send_confirmation_email(appointment)
         return Response(AppointmentSerializer(appointment).data)
+
+
+
