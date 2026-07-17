@@ -26,5 +26,6 @@ urlpatterns = [
     path('auth/login/', views.LoginView.as_view()),
     path('auth/refresh/', TokenRefreshView.as_view()),
     path('auth/me/', views.MeView.as_view()),
+    path('reports/summary/', views.ReportsSummaryView.as_view()),
     path('', include(router.urls)),
 ]

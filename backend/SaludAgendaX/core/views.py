@@ -1,6 +1,7 @@
 import datetime
 
-from django.db.models import Q
+from django.db.models import Count, Q
+from django.utils import timezone
 from rest_framework import generics, mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -112,6 +113,70 @@ class MeView(APIView):
         elif user.role == User.Role.MEDICO and hasattr(user, 'doctor_profile'):
             data['doctor_profile'] = DoctorSerializer(user.doctor_profile).data
         return Response(data)
+
+
+class ReportsSummaryView(APIView):
+    """Reportes de uso (Entrega 2): citas por especialidad, médico, EPS, estado y día."""
+
+    permission_classes = [permissions.IsAuthenticated, IsAdminRole]
+
+    def get(self, request):
+        today = timezone.localdate()
+        date_from = request.query_params.get('date_from') or today.replace(day=1).isoformat()
+        date_to = request.query_params.get('date_to') or today.isoformat()
+
+        qs = Appointment.objects.filter(date__gte=date_from, date__lte=date_to)
+
+        por_especialidad = (
+            qs.values('specialty__name')
+            .annotate(count=Count('id'))
+            .order_by('-count')
+        )
+        por_medico = (
+            qs.values('doctor__user__first_name', 'doctor__user__last_name')
+            .annotate(count=Count('id'))
+            .order_by('-count')
+        )
+        por_eps = (
+            qs.values('patient__eps')
+            .annotate(count=Count('id'))
+            .order_by('-count')
+        )
+        por_estado = (
+            qs.values('status')
+            .annotate(count=Count('id'))
+            .order_by('-count')
+        )
+        por_dia = (
+            qs.values('date')
+            .annotate(count=Count('id'))
+            .order_by('date')
+        )
+
+        return Response({
+            'date_from': date_from,
+            'date_to': date_to,
+            'total_citas': qs.count(),
+            'por_especialidad': [
+                {'specialty': r['specialty__name'], 'count': r['count']} for r in por_especialidad
+            ],
+            'por_medico': [
+                {
+                    'doctor': f"{r['doctor__user__first_name']} {r['doctor__user__last_name']}".strip(),
+                    'count': r['count'],
+                }
+                for r in por_medico
+            ],
+            'por_eps': [
+                {'eps': r['patient__eps'] or 'Sin EPS', 'count': r['count']} for r in por_eps
+            ],
+            'por_estado': [
+                {'status': r['status'], 'count': r['count']} for r in por_estado
+            ],
+            'por_dia': [
+                {'date': r['date'].isoformat(), 'count': r['count']} for r in por_dia
+            ],
+        })
 
 
 class PatientViewSet(

@@ -10,6 +10,7 @@ import AdminAppointmentsSearch from './pages/admin/AdminAppointmentsSearch';
 import AdminPatients from './pages/admin/AdminPatients';
 import AdminMedicos from './pages/admin/AdminMedicos';
 import AdminEPS from './pages/admin/AdminEPS';
+import AdminReportes from './pages/admin/AdminReportes';
 import NewAppointment from './pages/patient/NewAppointment';
 import AppointmentCalendar from './pages/patient/AppointmentCalendar';
 import PatientProfile from './pages/patient/PatientProfile';
@@ -59,6 +60,7 @@ function App() {
             <Route path="pacientes" element={<AdminPatients />} />
             <Route path="medicos" element={<AdminMedicos />} />
             <Route path="eps" element={<AdminEPS />} />
+            <Route path="reportes" element={<AdminReportes />} />
           </Route>
 
           <Route
