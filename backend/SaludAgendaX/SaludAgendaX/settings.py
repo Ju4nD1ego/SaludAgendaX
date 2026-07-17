@@ -133,3 +133,9 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
 }
+
+# Al correr `manage.py test`, usa un hasher de contraseñas más rápido (inseguro,
+# pero los tests crean decenas de usuarios y PBKDF2 los haría muy lentos).
+import sys  # noqa: E402
+if 'test' in sys.argv:
+    PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
