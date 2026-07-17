@@ -9,7 +9,7 @@ Permite a pacientes agendar citas con disponibilidad real de los médicos, a adm
 | Capa | Tecnología |
 |---|---|
 | Backend | Django 6 + Django REST Framework + SimpleJWT (JWT) |
-| Base de datos | SQLite (desarrollo) |
+| Base de datos | SQLite |
 | Frontend | React 19 + Vite + React Router v7 + Tailwind/DaisyUI + axios + Recharts |
 
 ## Cómo correrlo en local
