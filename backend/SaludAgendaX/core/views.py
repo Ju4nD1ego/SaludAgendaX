@@ -54,7 +54,7 @@ class IsAdminOrReadOnly(permissions.BasePermission):
 
 
 class IsAdminOrOwnerDoctor(permissions.BasePermission):
-    """Lectura abierta a cualquier autenticado; solo admin o el propio mÃ©dico pueden editar."""
+    """Lectura abierta a cualquier autenticado; solo admin o el propio médico pueden editar."""
 
     def has_object_permission(self, request, view, obj):
         if request.method in permissions.SAFE_METHODS:
@@ -66,7 +66,7 @@ class IsAdminOrOwnerDoctor(permissions.BasePermission):
 
 
 class CanCancelAppointment(permissions.BasePermission):
-    """Solo el paciente dueÃ±o de la cita o el admin pueden cancelarla; el mÃ©dico no."""
+    """Solo el paciente dueño de la cita o el admin pueden cancelarla; el médico no."""
 
     def has_object_permission(self, request, view, obj):
         user = request.user
@@ -117,7 +117,7 @@ class MeView(APIView):
 
 
 class ReportsSummaryView(APIView):
-    """Reportes de uso (Entrega 2): citas por especialidad, mÃ©dico, EPS, estado y dÃ­a."""
+    """Reportes de uso (Entrega 2): citas por especialidad, médico, EPS, estado y día."""
 
     permission_classes = [permissions.IsAuthenticated, IsAdminRole]
 
@@ -186,7 +186,7 @@ class PatientViewSet(
     mixins.UpdateModelMixin,
     viewsets.GenericViewSet,
 ):
-    """Consulta y ediciÃ³n de pacientes. La creaciÃ³n va por /auth/register/."""
+    """Consulta y edición de pacientes. La creación va por /auth/register/."""
 
     serializer_class = PatientSerializer
     permission_classes = [permissions.IsAuthenticated, IsAdminOrOwnerPatient]
@@ -196,7 +196,7 @@ class PatientViewSet(
         if user.role == User.Role.ADMIN or user.is_superuser:
             qs = Patient.objects.select_related('user').all()
 
-            # BÃºsqueda por nombre, apellido, documento o correo.
+            # Búsqueda por nombre, apellido, documento o correo.
             q = self.request.query_params.get('q')
             if q:
                 qs = qs.filter(
@@ -228,7 +228,7 @@ class PatientViewSet(
 
 
 class SpecialtyViewSet(viewsets.ModelViewSet):
-    """CatÃ¡logo de especialidades. Lectura abierta, escritura solo admin."""
+    """Catálogo de especialidades. Lectura abierta, escritura solo admin."""
 
     queryset = Specialty.objects.all()
     serializer_class = SpecialtySerializer
@@ -236,7 +236,7 @@ class SpecialtyViewSet(viewsets.ModelViewSet):
 
 
 class EPSViewSet(viewsets.ModelViewSet):
-    """ConfiguraciÃ³n de EPS (tope de citas y presupuesto mensual). Lectura abierta, escritura solo admin."""
+    """Configuración de EPS (tope de citas y presupuesto mensual). Lectura abierta, escritura solo admin."""
 
     queryset = EPS.objects.all().order_by('name')
     serializer_class = EPSSerializer
@@ -250,7 +250,7 @@ class DoctorViewSet(
     mixins.CreateModelMixin,
     viewsets.GenericViewSet,
 ):
-    """Consulta, ediciÃ³n y alta de mÃ©dicos (el alta solo la puede hacer un admin)."""
+    """Consulta, edición y alta de médicos (el alta solo la puede hacer un admin)."""
 
     permission_classes = [permissions.IsAuthenticated, IsAdminOrOwnerDoctor]
 
@@ -308,7 +308,7 @@ class DoctorViewSet(
         try:
             target_date = datetime.date.fromisoformat(date_str)
         except ValueError:
-            raise ValidationError({'date': 'Formato de fecha invÃ¡lido, usa YYYY-MM-DD.'})
+            raise ValidationError({'date': 'Formato de fecha inválido, usa YYYY-MM-DD.'})
 
         schedules = doctor.schedules.filter(day_of_week=target_date.weekday())
         booked_times = set(
@@ -336,7 +336,7 @@ class DoctorViewSet(
 
 
 class DoctorScheduleViewSet(viewsets.ModelViewSet):
-    """Horarios bÃ¡sicos del mÃ©dico. El mÃ©dico solo consulta; el admin los gestiona."""
+    """Horarios básicos del médico. El médico solo consulta; el admin los gestiona."""
 
     serializer_class = DoctorScheduleSerializer
     permission_classes = [permissions.IsAuthenticated, IsAdminOrReadOnly]
@@ -355,7 +355,7 @@ class AppointmentViewSet(
     mixins.CreateModelMixin,
     viewsets.GenericViewSet,
 ):
-    """CreaciÃ³n y visualizaciÃ³n de citas. Cancelar es la Ãºnica modificaciÃ³n permitida."""
+    """Creación y visualización de citas. Cancelar es la única modificación permitida."""
 
     serializer_class = AppointmentSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -397,8 +397,8 @@ class AppointmentViewSet(
         if status_param:
             qs = qs.filter(status=status_param)
 
-        # BÃºsqueda de texto libre: nombre, apellido o documento del paciente.
-        # Solo tiene sentido para admin/mÃ©dico, que ven citas de varios pacientes.
+        # Búsqueda de texto libre: nombre, apellido o documento del paciente.
+        # Solo tiene sentido para admin/médico, que ven citas de varios pacientes.
         q = self.request.query_params.get('q')
         if q:
             qs = qs.filter(
@@ -420,7 +420,7 @@ class AppointmentViewSet(
                 raise ValidationError({'patient': 'El administrativo debe indicar el paciente.'})
             serializer.save()
         else:
-            raise PermissionDenied('Los mÃ©dicos no pueden crear citas.')
+            raise PermissionDenied('Los médicos no pueden crear citas.')
 
     @action(detail=True, methods=['patch'], permission_classes=[permissions.IsAuthenticated, CanCancelAppointment])
     def cancel(self, request, pk=None):
